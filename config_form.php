@@ -11,6 +11,16 @@ $imageUrl = get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL);
 
 <div class="field">
     <div class="two columns alpha">
+        <label><?php echo CONFIG_LABEL_HYBRID_IMAGE_URL; ?></label>
+    </div>
+    <div class="inputs five columns omega">
+        <p class="explanation"><?php echo __("The URL of hybrid images."); ?></p>
+        <?php echo $view->formText(HybridConfig::OPTION_HYBRID_IMAGE_URL, $imageUrl); ?>
+    </div>
+</div>
+
+<div class="field">
+    <div class="two columns alpha">
         <label><?php echo CONFIG_LABEL_DELETE_HYBRID_TABLE; ?></label>
     </div>
     <div class="inputs five columns omega">
@@ -22,13 +32,4 @@ $imageUrl = get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL);
     </div>
 </div>
 
-<div class="field">
-    <div class="two columns alpha">
-        <label><?php echo CONFIG_LABEL_HYBRID_IMAGE_URL; ?></label>
-    </div>
-    <div class="inputs five columns omega">
-        <p class="explanation"><?php echo __("The URL of hybrid images."); ?></p>
-        <?php echo $view->formText(HybridConfig::OPTION_HYBRID_IMAGE_URL, $imageUrl); ?>
-    </div>
-</div>
 
