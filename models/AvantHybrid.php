@@ -69,6 +69,12 @@ class AvantHybrid
     {
         $mappings = HybridConfig::getOptionDataForColumnMappingField();
 
+        $map = array();
+        foreach ($mappings as $elementId => $mapping)
+        {
+            $map[$mapping['column']] = $elementId;
+        }
+
         if (AvantCommon::userIsSuper())
             $fileName = isset($_GET['filename']) ? $_GET['filename'] : '';
         else
@@ -88,12 +94,18 @@ class AvantHybrid
         }
 
         $header = $csvRows[0];
-        $hybridIdColumn = array_search($mappings['<hybrid-id>']['column'], $header);
+
+
+        $cols = array();
         $timestampColumn = array_search($mappings['<timestamp>']['column'], $header);
-        $imageColumn = array_search($mappings['<image>']['column'], $header);
-        $thumbColumn = array_search($mappings['<thumb>']['column'], $header);
-        $publicColumn = array_search($mappings['<public>']['column'], $header);
-        $typeColumn = array_search($mappings['<type>']['column'], $header);
+        $pseudoElements = HybridConfig::getPseudoElements();
+        foreach ($pseudoElements as $pseudoElement)
+        {
+            $cols[array_search($mappings[$pseudoElement]['column'], $header)] = $pseudoElement;
+        }
+
+        $hybridElements = array();
+        $hybrids = array();
 
         foreach ($csvRows as $index => $csvRow)
         {
@@ -111,11 +123,20 @@ class AvantHybrid
                 continue;
             }
 
-            $hybridId = $csvRow[$hybridIdColumn];
-            $image = $csvRow[$imageColumn];
-            $thumb = $csvRow[$thumbColumn];
-            $public = $csvRow[$publicColumn];
-            $type = $csvRow[$typeColumn];
+            foreach ($csvRow as $column => $value)
+            {
+                $hybrids[$map[$header[$column]]] = $value;
+
+                if (isset($cols[$column]))
+                {
+                    $hybridElements[$cols[$column]] = $value;
+                }
+                else
+                {
+                    $name = $header[$column];
+                    $hybridElements[$name] = $value;
+                }
+            }
         }
 
         return 'OK';
