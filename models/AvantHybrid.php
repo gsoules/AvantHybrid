@@ -2,9 +2,14 @@
 
 class AvantHybrid
 {
-    public static function getFileName($hybridImageRecord)
+    public static function getFileNameForImage($hybridImageRecord)
     {
-        return $hybridImageRecord['file_name'];
+        return $hybridImageRecord['image'];
+    }
+
+    public static function getFileNameForThumb($hybridImageRecord)
+    {
+        return $hybridImageRecord['thumb'];
     }
 
     public static function getImageHtml($item, $fileName, $isThumbnail = false, $index = 0)

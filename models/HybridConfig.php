@@ -17,6 +17,10 @@ class HybridConfig extends ConfigOptions
     public static function saveConfiguration()
     {
         set_option(self::OPTION_DELETE_HYBRID_TABLE, (int)(boolean)$_POST[self::OPTION_DELETE_HYBRID_TABLE]);
-        set_option(self::OPTION_HYBRID_IMAGE_URL, $_POST[self::OPTION_HYBRID_IMAGE_URL]);
+
+        $imageUrl = $_POST[self::OPTION_HYBRID_IMAGE_URL];
+        if (substr( $imageUrl, -1 ) != '/')
+            $imageUrl .= '/';
+        set_option(self::OPTION_HYBRID_IMAGE_URL, $imageUrl);
     }
 }
