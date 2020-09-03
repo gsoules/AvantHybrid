@@ -41,4 +41,39 @@ class AvantHybrid
     {
         return get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL) . self::getFileNameForThumb($hybridImageRecord);
     }
+
+    public static function handleRemoteRequest($action, $siteId, $password)
+    {
+        if (AvantElasticsearch::remoteRequestIsValid($siteId, $password))
+        {
+            switch ($action)
+            {
+                case 'hybrid-update':
+                    $response = AvantHybrid::updateHybrid();
+                    break;
+
+                default:
+                    $response = 'Unsupported AvantHybrid action: ' . $action;
+                    break;
+            }
+        }
+        else
+        {
+            $response = '';
+        }
+
+        return $response;
+    }
+
+    public static function updateHybrid()
+    {
+        if (AvantCommon::userIsSuper())
+            $fileName = isset($_GET['filename']) ? $_GET['filename'] : '';
+        else
+            $fileName = isset($_POST['filename']) ? $_POST['filename'] : '';
+
+
+
+        return 'OK';
+    }
 }
