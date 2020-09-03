@@ -67,12 +67,38 @@ class AvantHybrid
 
     public static function updateHybrid()
     {
+        $mappings = HybridConfig::getOptionDataForColumnMappingField();
+
         if (AvantCommon::userIsSuper())
             $fileName = isset($_GET['filename']) ? $_GET['filename'] : '';
         else
             $fileName = isset($_POST['filename']) ? $_POST['filename'] : '';
 
+        $filepath = FILES_DIR . '/hybrid/' . $fileName;
 
+        $csvRows = array_map('str_getcsv', file($filepath));
+
+        $header = $csvRows[0];
+        $hybridIdColumn = array_search($mappings['<hybrid-id>']['column'], $header);
+        $timestampColumn = array_search($mappings['<timestamp>']['column'], $header);
+
+        foreach ($csvRows as $index => $csvRow)
+        {
+            if ($index == 0)
+                // Skip the header row.
+                continue;
+
+            if (!isset($csvRow[$timestampColumn]))
+                continue;
+
+            $timestamp = $csvRow[$timestampColumn];
+            if (!$timestamp)
+            {
+                continue;
+            }
+
+            $hybridId = $csvRow[$hybridIdColumn];
+        }
 
         return 'OK';
     }
