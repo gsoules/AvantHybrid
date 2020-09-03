@@ -114,6 +114,7 @@ class HybridConfig extends ConfigOptions
             if (in_array($elementName, $pseudoElements))
             {
                 $elementId = $elementName;
+                unset($pseudoElements[array_search($elementName, $pseudoElements)]);
             }
             else
             {
@@ -122,6 +123,12 @@ class HybridConfig extends ConfigOptions
             }
 
             $data[$elementId] = array('column' => $sourceColumName);
+        }
+
+        if (!empty($pseudoElements))
+        {
+            $missing = implode(', ', $pseudoElements);
+            self::errorIf(true, CONFIG_LABEL_HYBRID_COLUMN_MAPPING, __('Some mappings are missing: %s', $missing));
         }
 
         set_option(self::OPTION_HYBRID_COLUMN_MAPPING, json_encode($data));

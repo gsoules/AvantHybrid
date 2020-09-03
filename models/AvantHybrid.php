@@ -90,6 +90,10 @@ class AvantHybrid
         $header = $csvRows[0];
         $hybridIdColumn = array_search($mappings['<hybrid-id>']['column'], $header);
         $timestampColumn = array_search($mappings['<timestamp>']['column'], $header);
+        $imageColumn = array_search($mappings['<image>']['column'], $header);
+        $thumbColumn = array_search($mappings['<thumb>']['column'], $header);
+        $publicColumn = array_search($mappings['<public>']['column'], $header);
+        $typeColumn = array_search($mappings['<type>']['column'], $header);
 
         foreach ($csvRows as $index => $csvRow)
         {
@@ -103,10 +107,15 @@ class AvantHybrid
             $timestamp = $csvRow[$timestampColumn];
             if (!$timestamp)
             {
+                // Skip this row since it was not updated.
                 continue;
             }
 
             $hybridId = $csvRow[$hybridIdColumn];
+            $image = $csvRow[$imageColumn];
+            $thumb = $csvRow[$thumbColumn];
+            $public = $csvRow[$publicColumn];
+            $type = $csvRow[$typeColumn];
         }
 
         return 'OK';
