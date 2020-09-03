@@ -12,12 +12,12 @@ class AvantHybrid
         return $hybridImageRecord['thumb'];
     }
 
-    public static function getImageHtml($item, $fileName, $isThumbnail = false, $index = 0)
+    public static function getImageHtml($item, $hybridImageRecord, $isThumbnail = false, $index = 0)
     {
-        $imageUrl = self::getImageUrl($fileName);
+        $imageUrl = self::getImageUrl($hybridImageRecord);
         $identifier = ItemMetadata::getItemIdentifier($item);
         $title = ItemMetadata::getItemTitle($item);
-        $thumbUrl = $isThumbnail ? self::getThumbUrl($fileName) : $imageUrl;
+        $thumbUrl = $isThumbnail ? self::getThumbUrl($hybridImageRecord) : self::getImageUrl($hybridImageRecord);
         $imageHtml = ItemPreview::getImageLinkHtml($item->id, $identifier, 'lightbox', $imageUrl, $thumbUrl, '', $title, IMAGE_THUMB_TOOLTIP, '0', $index);
         return $imageHtml;
     }
@@ -27,22 +27,18 @@ class AvantHybrid
         return get_db()->getTable('HybridImages')->getHybridImageRecordsByItemId($itemId);
     }
 
-    public static function getImageUrl($fileName)
+    public static function getImageUrl($hybridImageRecord)
     {
-        return get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL) . $fileName;
+        return get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL) . self::getFileNameForImage($hybridImageRecord);
     }
 
-    public static function getThumbHtml($item, $fileName, $index)
+    public static function getThumbHtml($item, $hybridImageRecord, $index)
     {
-        return self::getImageHtml($item, $fileName, true, $index);
+        return self::getImageHtml($item, $hybridImageRecord, true, $index);
     }
 
-    public static function getThumbUrl($fileName)
+    public static function getThumbUrl($hybridImageRecord)
     {
-        // This URL format is specific to PastPerfect Online. If this plugin is ever generalized to support
-        // other products, add a configuration option to indicate that this format applies.
-        $parts = explode('/', $fileName);
-        $url = get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL) . $parts[0] . '/thumbs/' . $parts[1];
-        return $url;
+        return get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL) . self::getFileNameForThumb($hybridImageRecord);
     }
 }
