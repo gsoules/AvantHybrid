@@ -76,7 +76,16 @@ class AvantHybrid
 
         $filepath = FILES_DIR . '/hybrid/' . $fileName;
 
-        $csvRows = array_map('str_getcsv', file($filepath));
+        $csvRows = array();
+
+        if (($handle = fopen($filepath, "r")) !== FALSE)
+        {
+            while (($data = fgetcsv($handle)) !== FALSE)
+            {
+                $csvRows[] = $data;
+            }
+            fclose($handle);
+        }
 
         $header = $csvRows[0];
         $hybridIdColumn = array_search($mappings['<hybrid-id>']['column'], $header);
