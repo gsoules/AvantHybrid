@@ -50,6 +50,30 @@ class HybridSync
         return $item;
     }
 
+    protected function deleteElementTexts($itemId, $identifierElementId)
+    {
+        // Delete element texts except Identifier element
+        $elementTexts = AvantHybrid::getElementTextsForItem($itemId);
+        foreach ($elementTexts as $elementText)
+        {
+            if ($elementText['element_id'] == $identifierElementId)
+            {
+                continue;
+            }
+            $elementText->delete();
+        }
+    }
+
+    protected function deleteImages($itemId)
+    {
+        // Delete image and thumb urls in the Hybrid Images table
+        $hybridImages = AvantHybrid::getImageRecords($itemId);
+        foreach ($hybridImages as $hybridImage)
+        {
+            $hybridImage->delete();
+        }
+    }
+
     protected function readHybridCsvFile()
     {
         // Get the path to the file containing the hybrid data.
@@ -133,6 +157,10 @@ class HybridSync
         //
 
         $identifierElementId = ItemMetadata::getIdentifierElementId();
+        $subjectElementId = ItemMetadata::getElementIdForElementName('Subject');
+        $typeElementId = ItemMetadata::getElementIdForElementName('Type');
+
+        $vocabularyCommonTermsTable = plugin_is_active('AvantVocabulary') ? get_db()->getTable('VocabularyCommonTerms') : null;
 
         foreach ($this->hybrids as $hybrid)
         {
@@ -146,19 +174,11 @@ class HybridSync
                 if (!$item)
                     return "No item found for Id $itemId";
 
-                // Delete image and thumb urls in the Hybrid Images table
-                $hybridImages = AvantHybrid::getImageRecords($itemId);
-                foreach ($hybridImages as $hybridImage)
-                    $hybridImage->delete();
+                // Delete the hybrid's images.
+                $this->deleteImages($itemId);
 
-                // Delete element texts except Identifier element
-                $elementTexts = AvantHybrid::getElementTextsForItem($itemId);
-                foreach ($elementTexts as $elementText)
-                {
-                    if ($elementText['element_id'] == $identifierElementId)
-                        continue;
-                    $elementText->delete();
-                }
+                // Delete the item's element texts;
+                $this->deleteElementTexts($itemId, $identifierElementId);
             }
             else
             {
@@ -167,14 +187,58 @@ class HybridSync
                 $this->createNewHybrid($hybridId, $item);
             }
 
+            // Add image and thumb urls to the Hybrid Images table.
             $this->addHybridImages($hybrid, $item->id);
 
-            // Add image and thumb urls to the Hybrid Images table.
-
-
             // Map <type> and Subject to Common Vocabulary
+            $type = $hybrid['properties']['<type>'];
+            if (!empty($type))
+            {
+                if ($vocabularyCommonTermsTable)
+                {
+                    $kind = AvantVocabulary::KIND_TYPE;
+                    $commonTermRecord = $vocabularyCommonTermsTable->getCommonTermRecordByLeaf($kind, $type);
+                    if ($commonTermRecord)
+                        $type = $commonTermRecord['common_term'];
+                }
+
+                // Add a Type element to the hybrid's elements.
+                $hybrid['elements'][$typeElementId] = $type;
+            }
 
             // Add element texts for element values
+            foreach ($hybrid['elements'] as $elementId => $text)
+            {
+                if (empty($text))
+                    continue;
+
+                if ($elementId == $subjectElementId)
+                {
+                    $texts = explode(';', $text);
+                    if ($vocabularyCommonTermsTable)
+                    {
+                        foreach ($texts as $index => $subject)
+                        {
+                            $kind = AvantVocabulary::KIND_SUBJECT;
+                            $commonTermRecord = $vocabularyCommonTermsTable->getCommonTermRecordByLeaf($kind, $subject);
+                            if ($commonTermRecord)
+                                $texts[$index] = $commonTermRecord['common_term'];
+                        }
+                    }
+                }
+                else
+                {
+                    $texts = array($text);
+                }
+
+                foreach ($texts as $value)
+                {
+                    $element = $item->getElementById($elementId);
+                    $item->addTextForElement($element, $value);
+                    $item->saveElementTexts();
+                }
+            }
+
             // Set the <site> link
 
             // Call AvantElasticsearch to update indexes
