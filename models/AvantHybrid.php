@@ -2,6 +2,25 @@
 
 class AvantHybrid
 {
+    public static function getElementTextsForItem($itemId)
+    {
+        $db = get_db();
+
+        try
+        {
+            $select = $db->select()
+                ->from($db->ElementText)
+                ->where('record_id = ?', $itemId);
+            $results = $db->getTable('ElementText')->fetchObjects($select);
+       }
+        catch (Exception $e)
+        {
+            $results = array();
+        }
+
+        return $results;
+    }
+
     public static function getFileNameForImage($hybridImageRecord)
     {
         return $hybridImageRecord['image'];

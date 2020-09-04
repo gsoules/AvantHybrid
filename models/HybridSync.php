@@ -4,6 +4,23 @@ class HybridSync
 {
     protected $hybrids = array();
 
+    protected function addHybridImages($hybrid, $itemId)
+    {
+        $images = explode(';', $hybrid['properties']['<image>']);
+        $thumbs = explode(';', $hybrid['properties']['<thumb>']);
+
+        foreach ($images as $index => $image)
+        {
+            $hybridImagesRecord = new HybridImages();
+            $hybridImagesRecord['item_id'] = $itemId;
+            $hybridImagesRecord['order'] = $index + 1;
+            $hybridImagesRecord['image'] = $images[$index];
+            $hybridImagesRecord['thumb'] = $thumbs[$index];
+            if (!$hybridImagesRecord->save())
+                throw new Exception($this->reportError(__FUNCTION__, ' save failed'));
+        }
+    }
+
     protected function createNewHybrid($hybridId, Item $item)
     {
         $newHybridItemRecord = new HybridItems();
@@ -89,12 +106,12 @@ class HybridSync
             {
                 $name = $map[$header[$column]];
                 if (in_array($name, $pseudoElements))
-                    $pseudos[$name] = $value;
+                    $properties[$name] = $value;
                 else
                     $elements[$name] = $value;
             }
 
-            $this->hybrids[$pseudos['<hybrid-id>']] = array('pseudos' => $pseudos, 'elements' => $elements);
+            $this->hybrids[$properties['<hybrid-id>']] = array('properties' => $properties, 'elements' => $elements);
         }
 
         return 'OK';
@@ -115,19 +132,33 @@ class HybridSync
         //
         //
 
+        $identifierElementId = ItemMetadata::getIdentifierElementId();
+
         foreach ($this->hybrids as $hybrid)
         {
-            $hybridId = $hybrid['pseudos']['<hybrid-id>'];
+            $hybridId = $hybrid['properties']['<hybrid-id>'];
             $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
 
             if ($hybridItemRecord)
             {
                 $itemId = $hybridItemRecord['item_id'];
                 $item = $this->updateItem($itemId, $hybrid);
+                if (!$item)
+                    return "No item found for Id $itemId";
 
                 // Delete image and thumb urls in the Hybrid Images table
-                // Delete element texts except Identifier element
+                $hybridImages = AvantHybrid::getImageRecords($itemId);
+                foreach ($hybridImages as $hybridImage)
+                    $hybridImage->delete();
 
+                // Delete element texts except Identifier element
+                $elementTexts = AvantHybrid::getElementTextsForItem($itemId);
+                foreach ($elementTexts as $elementText)
+                {
+                    if ($elementText['element_id'] == $identifierElementId)
+                        continue;
+                    $elementText->delete();
+                }
             }
             else
             {
@@ -136,12 +167,15 @@ class HybridSync
                 $this->createNewHybrid($hybridId, $item);
             }
 
+            $this->addHybridImages($hybrid, $item->id);
+
+            // Add image and thumb urls to the Hybrid Images table.
+
+
             // Map <type> and Subject to Common Vocabulary
 
             // Add element texts for element values
             // Set the <site> link
-
-            // Add image and thumb urls to the Hybrid Images table.
 
             // Call AvantElasticsearch to update indexes
         }
@@ -151,9 +185,11 @@ class HybridSync
 
     protected function updateItem($itemId, $hybrid)
     {
-        $item = ItemMetadata::getItemFromId($itemId);
+        $item = AvantCommon::fetchItemForRemoteRequest($itemId);
+        if (!$item)
+            return null;
 
-        $public = $hybrid == '1';
+        $public = $hybrid['properties']['<public>'] == '1';
         if ($item->public != $public)
             $item['public'] = $public;
 
