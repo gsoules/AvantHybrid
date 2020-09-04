@@ -4,6 +4,43 @@ class HybridSync
 {
     protected $hybrids = array();
 
+    protected function addElementTexts($hybrid, $item, $subjectElementId, Omeka_Db_Table $vocabularyCommonTermsTable)
+    {
+        foreach ($hybrid['elements'] as $elementId => $text)
+        {
+            if (empty($text))
+                continue;
+
+            if ($elementId == $subjectElementId)
+            {
+                $texts = explode(';', $text);
+                if ($vocabularyCommonTermsTable)
+                {
+                    foreach ($texts as $index => $subject)
+                    {
+                        $kind = AvantVocabulary::KIND_SUBJECT;
+                        $commonTermRecord = $vocabularyCommonTermsTable->getCommonTermRecordByLeaf($kind, $subject);
+                        if ($commonTermRecord)
+                        {
+                            $texts[$index] = $commonTermRecord['common_term'];
+                        }
+                    }
+                }
+            }
+            else
+            {
+                $texts = array($text);
+            }
+
+            foreach ($texts as $value)
+            {
+                $element = $item->getElementById($elementId);
+                $item->addTextForElement($element, $value);
+                $item->saveElementTexts();
+            }
+        }
+    }
+
     protected function addHybridImages($hybrid, $itemId)
     {
         $images = explode(';', $hybrid['properties']['<image>']);
@@ -72,6 +109,24 @@ class HybridSync
         {
             $hybridImage->delete();
         }
+    }
+
+    protected function getTypeElementValue($hybrid, Omeka_Db_Table $vocabularyCommonTermsTable, $typeElementId)
+    {
+        $type = $hybrid['properties']['<type>'];
+        if (!empty($type))
+        {
+            if ($vocabularyCommonTermsTable)
+            {
+                $kind = AvantVocabulary::KIND_TYPE;
+                $commonTermRecord = $vocabularyCommonTermsTable->getCommonTermRecordByLeaf($kind, $type);
+                if ($commonTermRecord)
+                {
+                    $type = $commonTermRecord['common_term'];
+                }
+            }
+        }
+        return $type;
     }
 
     protected function readHybridCsvFile()
@@ -190,56 +245,17 @@ class HybridSync
             // Add image and thumb urls to the Hybrid Images table.
             $this->addHybridImages($hybrid, $item->id);
 
-            // Map <type> and Subject to Common Vocabulary
-            $type = $hybrid['properties']['<type>'];
-            if (!empty($type))
-            {
-                if ($vocabularyCommonTermsTable)
-                {
-                    $kind = AvantVocabulary::KIND_TYPE;
-                    $commonTermRecord = $vocabularyCommonTermsTable->getCommonTermRecordByLeaf($kind, $type);
-                    if ($commonTermRecord)
-                        $type = $commonTermRecord['common_term'];
-                }
-
-                // Add a Type element to the hybrid's elements.
+            // Add the Type element to the hybrid.
+            $type = $this->getTypeElementValue($hybrid, $vocabularyCommonTermsTable, $typeElementId);
+            if ($type)
                 $hybrid['elements'][$typeElementId] = $type;
-            }
 
             // Add element texts for element values
-            foreach ($hybrid['elements'] as $elementId => $text)
-            {
-                if (empty($text))
-                    continue;
-
-                if ($elementId == $subjectElementId)
-                {
-                    $texts = explode(';', $text);
-                    if ($vocabularyCommonTermsTable)
-                    {
-                        foreach ($texts as $index => $subject)
-                        {
-                            $kind = AvantVocabulary::KIND_SUBJECT;
-                            $commonTermRecord = $vocabularyCommonTermsTable->getCommonTermRecordByLeaf($kind, $subject);
-                            if ($commonTermRecord)
-                                $texts[$index] = $commonTermRecord['common_term'];
-                        }
-                    }
-                }
-                else
-                {
-                    $texts = array($text);
-                }
-
-                foreach ($texts as $value)
-                {
-                    $element = $item->getElementById($elementId);
-                    $item->addTextForElement($element, $value);
-                    $item->saveElementTexts();
-                }
-            }
+            $this->addElementTexts($hybrid, $item, $subjectElementId, $vocabularyCommonTermsTable);
 
             // Set the <site> link
+            //
+            //
 
             // Call AvantElasticsearch to update indexes
         }
