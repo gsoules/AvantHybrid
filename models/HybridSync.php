@@ -21,9 +21,9 @@ class HybridSync
                         $kind = AvantVocabulary::KIND_SUBJECT;
                         $commonTermRecord = $vocabularyCommonTermsTable->getCommonTermRecordByLeaf($kind, $subject);
                         if ($commonTermRecord)
-                        {
                             $texts[$index] = $commonTermRecord['common_term'];
-                        }
+                        else
+                            $texts[$index] = AvantVocabulary::normalizeSiteTerm(AvantVocabulary::KIND_SUBJECT, $subject);
                     }
                 }
             }
@@ -48,6 +48,8 @@ class HybridSync
 
         foreach ($images as $index => $image)
         {
+            if (empty($image))
+                continue;
             $hybridImagesRecord = new HybridImages();
             $hybridImagesRecord['item_id'] = $itemId;
             $hybridImagesRecord['order'] = $index + 1;
@@ -78,7 +80,7 @@ class HybridSync
             )
         );
 
-        $public = $hybrid == '1';
+        $public = $hybrid['properties']['<public>'] == '1';
         $metadata = array(
             'public' => $public,
             'item_type_id' => AvantAdmin::getCustomItemTypeId()
@@ -258,6 +260,12 @@ class HybridSync
             //
 
             // Call AvantElasticsearch to update indexes
+            $avantElasticsearchIndexBuilder = new AvantElasticsearchIndexBuilder();
+            $sharedIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_SHARE) == true;
+            $localIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_LOCAL) == true;
+            $avantElasticsearch = new AvantElasticsearch();
+            $avantElasticsearch->updateIndexForItem($item, $avantElasticsearchIndexBuilder, $sharedIndexIsEnabled, $localIndexIsEnabled);
+
         }
 
         return $result;
