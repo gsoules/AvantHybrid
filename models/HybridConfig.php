@@ -78,7 +78,15 @@ class HybridConfig extends ConfigOptions
 
     public static function getPseudoElements()
     {
-        return array('<hybrid-id>', '<timestamp>', '<image>', '<thumb>', '<public>', '<type>');
+        return array(
+            '<hybrid-id>',
+            '<timestamp>',
+            '<image>',
+            '<thumb>',
+            '<site>',
+            '<public>',
+            '<type>'
+        );
     }
 
     public static function removeConfiguration()

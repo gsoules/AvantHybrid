@@ -27,6 +27,11 @@ class AvantHybrid
         return get_db()->getTable('HybridImages')->getHybridImageRecordsByItemId($itemId);
     }
 
+    public static function getItemRecord($hybridId)
+    {
+        return get_db()->getTable('HybridItems')->getHybridItemsRecordByHybridId($hybridId);
+    }
+
     public static function getImageUrl($hybridImageRecord)
     {
         return get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL) . self::getFileNameForImage($hybridImageRecord);
