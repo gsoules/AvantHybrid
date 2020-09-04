@@ -3,12 +3,16 @@
 define('CONFIG_LABEL_DELETE_HYBRID_TABLE', __('Delete Tables'));
 define('CONFIG_LABEL_HYBRID_COLUMN_MAPPING', __('Column Mapping'));
 define('CONFIG_LABEL_HYBRID_IMAGE_URL', __('Image URL'));
+define('CONFIG_LABEL_HYBRID_SITE_URL', __('Site URL'));
+define('CONFIG_LABEL_HYBRID_SYNC_PW', __('Syncronization Password'));
 
 class HybridConfig extends ConfigOptions
 {
     const OPTION_DELETE_HYBRID_TABLE = 'avanthybrid_delete_table';
     const OPTION_HYBRID_COLUMN_MAPPING = 'avanthybrid_column_mapping';
     const OPTION_HYBRID_IMAGE_URL = 'avanthybrid_image_url';
+    const OPTION_HYBRID_SITE_URL = 'avanthybrid_site_url';
+    const OPTION_HYBRID_SYNC_PW = 'avanthybrid_sync_pw';
 
     public static function getOptionDataForColumnMappingField()
     {
@@ -63,6 +67,15 @@ class HybridConfig extends ConfigOptions
         return $text;
     }
 
+    public static function getOptionTextForSyncPassword()
+    {
+        if (self::configurationErrorsDetected())
+            $text = $_POST[self::OPTION_HYBRID_SYNC_PW];
+        else
+            $text = get_option(HybridConfig::OPTION_HYBRID_SYNC_PW);
+        return $text;
+    }
+
     public static function getPseudoElements()
     {
         return array('<hybrid-id>', '<timestamp>', '<image>', '<thumb>', '<public>', '<type>');
@@ -78,10 +91,21 @@ class HybridConfig extends ConfigOptions
     {
         set_option(self::OPTION_DELETE_HYBRID_TABLE, (int)(boolean)$_POST[self::OPTION_DELETE_HYBRID_TABLE]);
 
+        $pw = $_POST[self::OPTION_HYBRID_SYNC_PW];
+        if (strlen($pw) == 8 && ctype_alnum($pw))
+            set_option(self::OPTION_HYBRID_SYNC_PW, $pw);
+        else
+            self::errorIf(true, CONFIG_LABEL_HYBRID_SYNC_PW, __('Password must be 8 alphanumeric characters'));
+
         $imageUrl = $_POST[self::OPTION_HYBRID_IMAGE_URL];
         if (substr( $imageUrl, -1 ) != '/')
             $imageUrl .= '/';
         set_option(self::OPTION_HYBRID_IMAGE_URL, $imageUrl);
+
+        $siteUrl = $_POST[self::OPTION_HYBRID_SITE_URL];
+        if (substr( $siteUrl, -1 ) != '/')
+            $siteUrl .= '/';
+        set_option(self::OPTION_HYBRID_SITE_URL, $siteUrl);
 
         self::saveOptionDataForColumnMappingField();
     }

@@ -44,12 +44,15 @@ class AvantHybrid
 
     public static function handleRemoteRequest($action, $siteId, $password)
     {
-        if (AvantElasticsearch::remoteRequestIsValid($siteId, $password))
+        $pw = HybridConfig::getOptionTextForSyncPassword();
+
+        if ($password == $pw)
         {
             switch ($action)
             {
                 case 'hybrid-update':
-                    $response = AvantHybrid::updateHybrid();
+                    $hybridSync = new HybridSync();
+                    $response = $hybridSync->syncHybridItemsWithUpdates();
                     break;
 
                 default:
@@ -59,67 +62,9 @@ class AvantHybrid
         }
         else
         {
-            $response = '';
+            $response = 'Hybrid request denied';
         }
 
         return $response;
-    }
-
-    public static function updateHybrid()
-    {
-        // Get the path to the file containing the hybrid data.
-        if (AvantCommon::userIsSuper())
-            $fileName = isset($_GET['filename']) ? $_GET['filename'] : '';
-        else
-            $fileName = isset($_POST['filename']) ? $_POST['filename'] : '';
-        $filepath = FILES_DIR . '/hybrid/' . $fileName;
-
-        // Create an array that maps hybrid column names to element Ids and pseudo element names.
-        $map = array();
-        $mappings = HybridConfig::getOptionDataForColumnMappingField();
-        foreach ($mappings as $elementId => $mapping)
-        {
-            $map[$mapping['column']] = $elementId;
-        }
-
-        // Read all the rows in the CSV file
-        $csvRows = array();
-        if (($handle = fopen($filepath, "r")) !== FALSE)
-        {
-            while (($data = fgetcsv($handle)) !== FALSE)
-            {
-                $csvRows[] = $data;
-            }
-            fclose($handle);
-        }
-
-        // Get the header row and the column for the timestamp.
-        $header = $csvRows[0];
-        $timestampColumn = array_search(array_search('<timestamp>', $map), $header);
-
-        // Create a hybrid object for each row that has been updated.
-        $hybrids = array();
-        foreach ($csvRows as $index => $csvRow)
-        {
-            if ($index == 0)
-                // Skip the header row.
-                continue;
-
-            if (!isset($csvRow[$timestampColumn]))
-                // Skip rows that have not been updated.
-                continue;
-
-            if (empty($csvRow[$timestampColumn]))
-                // Skip this row since it was not updated.
-                continue;
-
-            foreach ($csvRow as $column => $value)
-                // Get the value for each column
-                $hybrid[$map[$header[$column]]] = $value;
-
-            $hybrids[] = $hybrid;
-        }
-
-        return 'OK';
     }
 }

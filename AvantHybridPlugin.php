@@ -3,6 +3,7 @@
 class AvantHybridPlugin extends Omeka_Plugin_AbstractPlugin
 {
     protected $_hooks = array(
+        'admin_head',
         'config',
         'config_form',
         'install',
@@ -14,6 +15,11 @@ class AvantHybridPlugin extends Omeka_Plugin_AbstractPlugin
 
     protected $_filters = array(
     );
+
+    public function hookAdminHead($args)
+    {
+        queue_css_file('avanthybrid-admin');
+    }
 
     public function hookConfig()
     {
