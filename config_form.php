@@ -5,6 +5,7 @@ $columnMappingField = HybridConfig::getOptionTextForColumnMappingField();
 $columnMappingFieldRows = max(2, count(explode(PHP_EOL, $columnMappingField)));
 $deleteTable = intval(get_option(HybridConfig::OPTION_DELETE_HYBRID_TABLE)) != 0;
 $imageUrl = get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL);
+$siteElement = HybridConfig::getOptionTextForSiteElement();
 $siteUrl = get_option(HybridConfig::OPTION_HYBRID_SITE_URL);
 $syncPw = HybridConfig::getOptionTextForSyncPassword();
 ?>
@@ -30,6 +31,16 @@ $syncPw = HybridConfig::getOptionTextForSyncPassword();
     <div class="inputs five columns omega">
         <p class="explanation"><?php echo __("The URL of the hybrid website"); ?></p>
         <?php echo $view->formText(HybridConfig::OPTION_HYBRID_SITE_URL, $siteUrl); ?>
+    </div>
+</div>
+
+<div class="field">
+    <div class="two columns alpha">
+        <label><?php echo CONFIG_LABEL_HYBRID_SITE_ELEMENT; ?></label>
+    </div>
+    <div class="inputs five columns omega">
+        <p class="explanation"><?php echo __("The name of the external resource element for the hybrid record link"); ?></p>
+        <?php echo $view->formText(HybridConfig::OPTION_HYBRID_SITE_ELEMENT, $siteElement); ?>
     </div>
 </div>
 

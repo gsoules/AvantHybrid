@@ -3,6 +3,7 @@
 define('CONFIG_LABEL_DELETE_HYBRID_TABLE', __('Delete Tables'));
 define('CONFIG_LABEL_HYBRID_COLUMN_MAPPING', __('Column Mapping'));
 define('CONFIG_LABEL_HYBRID_IMAGE_URL', __('Image URL'));
+define('CONFIG_LABEL_HYBRID_SITE_ELEMENT', __('Site Element'));
 define('CONFIG_LABEL_HYBRID_SITE_URL', __('Site URL'));
 define('CONFIG_LABEL_HYBRID_SYNC_PW', __('Syncronization Password'));
 
@@ -11,6 +12,7 @@ class HybridConfig extends ConfigOptions
     const OPTION_DELETE_HYBRID_TABLE = 'avanthybrid_delete_table';
     const OPTION_HYBRID_COLUMN_MAPPING = 'avanthybrid_column_mapping';
     const OPTION_HYBRID_IMAGE_URL = 'avanthybrid_image_url';
+    const OPTION_HYBRID_SITE_ELEMENT = 'avanthybrid_site_element';
     const OPTION_HYBRID_SITE_URL = 'avanthybrid_site_url';
     const OPTION_HYBRID_SYNC_PW = 'avanthybrid_sync_pw';
 
@@ -67,6 +69,20 @@ class HybridConfig extends ConfigOptions
         return $text;
     }
 
+    public static function getOptionTextForSiteElement()
+    {
+        if (self::configurationErrorsDetected())
+        {
+            $text = $_POST[self::OPTION_HYBRID_SITE_ELEMENT];
+        }
+        else
+        {
+            $elementId = get_option(self::OPTION_HYBRID_SITE_ELEMENT);
+            $text = ItemMetadata::getElementNameFromId($elementId);
+        }
+        return $text;
+    }
+
     public static function getOptionTextForSyncPassword()
     {
         if (self::configurationErrorsDetected())
@@ -84,8 +100,7 @@ class HybridConfig extends ConfigOptions
             '<image>',
             '<thumb>',
             '<site>',
-            '<public>',
-            '<type>'
+            '<public>'
         );
     }
 
@@ -114,6 +129,14 @@ class HybridConfig extends ConfigOptions
         if (substr( $siteUrl, -1 ) != '/')
             $siteUrl .= '/';
         set_option(self::OPTION_HYBRID_SITE_URL, $siteUrl);
+
+        $elementName = $_POST[self::OPTION_HYBRID_SITE_ELEMENT];
+        if (!empty($elementName))
+        {
+            $elementId = ItemMetadata::getElementIdForElementName($elementName);
+            self::errorIfNotElement($elementId, CONFIG_LABEL_HYBRID_SITE_ELEMENT, $elementName);
+        }
+        set_option(self::OPTION_HYBRID_SITE_ELEMENT, $elementId);
 
         self::saveOptionDataForColumnMappingField();
     }

@@ -61,6 +61,11 @@ class AvantHybrid
         return get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL) . self::getFileNameForImage($hybridImageRecord);
     }
 
+    public static function getSiteUrl()
+    {
+        return get_option(HybridConfig::OPTION_HYBRID_SITE_URL);
+    }
+
     public static function getThumbHtml($item, $hybridImageRecord, $index)
     {
         return self::getImageHtml($item, $hybridImageRecord, true, $index);
