@@ -2,6 +2,11 @@
 
 class AvantHybrid
 {
+    public static function getAllHybridItemIds()
+    {
+        return get_db()->getTable('HybridItems')->getAllHybridItemIds();
+    }
+
     public static function getElementTextsForItem($itemId)
     {
         $db = get_db();

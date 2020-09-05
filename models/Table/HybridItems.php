@@ -2,6 +2,15 @@
 
 class Table_HybridItems extends Omeka_Db_Table
 {
+    public function getAllHybridItemIds()
+    {
+        $select = $this->getSelect();
+        $select->reset(Zend_Db_Select::COLUMNS);
+        $select->columns(array('hybrid_id'));
+        $results = get_db()->query($select)->fetchAll();
+        return $results;
+    }
+
     public function getHybridItemsRecordByHybridId($hybridId)
     {
         $select = $this->getSelect();

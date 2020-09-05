@@ -2,7 +2,8 @@
 
 class HybridSync
 {
-    protected $hybrids = array();
+    protected $allHybrids = array();
+    protected $updatedHybrids = array();
 
     protected function addElementTexts($hybrid, $item, $subjectElementId, Omeka_Db_Table $vocabularyCommonTermsTable)
     {
@@ -89,6 +90,32 @@ class HybridSync
         return $item;
     }
 
+    protected function deleteDeletedHybridItems()
+    {
+        $avantElasticsearchIndexBuilder = plugin_is_active('AvantElasticsearch') ? new AvantElasticsearchIndexBuilder() : null;
+
+        // Delete items from the Hybrid Items table that are not in the hybrids list.
+        $hybridIds = AvantHybrid::getAllHybridItemIds();
+        foreach ($hybridIds as $id)
+        {
+            $hybridId = $id['hybrid_id'];
+            if (!in_array($hybridId, $this->allHybrids))
+            {
+                $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
+                $itemId = $hybridItemRecord['item_id'];
+                $this->deleteImages($itemId);
+                $hybridItemRecord->delete();
+                $item = ItemMetadata::getItemFromId($itemId);
+                if ($item)
+                {
+                    // Delete the item and all of its element texts.
+                    // This will also remove the item from the Elasticsearch indexes.
+                    $item->delete();
+                }
+            }
+        }
+    }
+
     protected function deleteElementTexts($itemId, $identifierElementId)
     {
         // Delete element texts except Identifier element
@@ -165,6 +192,7 @@ class HybridSync
 
         // Get the header row and the column for the timestamp.
         $header = $csvRows[0];
+        $hybridIdColumn = array_search(array_search('<hybrid-id>', $map), $header);
         $timestampColumn = array_search(array_search('<timestamp>', $map), $header);
 
         // Create a hybrid object for each row that has been updated.
@@ -174,6 +202,8 @@ class HybridSync
             if ($index == 0)
                 // Skip the header row.
                 continue;
+
+            $this->allHybrids[] = $csvRow[$hybridIdColumn];
 
             if (!isset($csvRow[$timestampColumn]))
                 // Skip rows that have not been updated.
@@ -192,7 +222,7 @@ class HybridSync
                     $elements[$name] = $value;
             }
 
-            $this->hybrids[$properties['<hybrid-id>']] = array('properties' => $properties, 'elements' => $elements);
+            $this->updatedHybrids[$properties['<hybrid-id>']] = array('properties' => $properties, 'elements' => $elements);
         }
 
         return 'OK';
@@ -209,17 +239,17 @@ class HybridSync
         if ($result != 'OK')
             return $result;
 
-        // Delete items from the Hybrid Items table that are not in the hybrids list.
-        //
-        //
+        // Delete any hybrid items in the Digital Archive that are no longer in the hybrid source database.
+        $this->deleteDeletedHybridItems();
 
+        // Get values that will be used repeatedly in the loop below.
         $identifierElementId = ItemMetadata::getIdentifierElementId();
         $subjectElementId = ItemMetadata::getElementIdForElementName('Subject');
         $typeElementId = ItemMetadata::getElementIdForElementName('Type');
-
         $vocabularyCommonTermsTable = plugin_is_active('AvantVocabulary') ? get_db()->getTable('VocabularyCommonTerms') : null;
 
-        foreach ($this->hybrids as $hybrid)
+        // Apply updates to all hybrid items that were added to or changed in the source database.
+        foreach ($this->updatedHybrids as $hybrid)
         {
             $hybridId = $hybrid['properties']['<hybrid-id>'];
             $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
@@ -260,12 +290,14 @@ class HybridSync
             //
 
             // Call AvantElasticsearch to update indexes
-            $avantElasticsearchIndexBuilder = new AvantElasticsearchIndexBuilder();
-            $sharedIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_SHARE) == true;
-            $localIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_LOCAL) == true;
-            $avantElasticsearch = new AvantElasticsearch();
-            $avantElasticsearch->updateIndexForItem($item, $avantElasticsearchIndexBuilder, $sharedIndexIsEnabled, $localIndexIsEnabled);
-
+            if (plugin_is_active('AvantElasticsearch'))
+            {
+                $avantElasticsearchIndexBuilder = new AvantElasticsearchIndexBuilder();
+                $sharedIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_SHARE) == true;
+                $localIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_LOCAL) == true;
+                $avantElasticsearch = new AvantElasticsearch();
+                $avantElasticsearch->updateIndexForItem($item, $avantElasticsearchIndexBuilder, $sharedIndexIsEnabled, $localIndexIsEnabled);
+            }
         }
 
         return $result;
