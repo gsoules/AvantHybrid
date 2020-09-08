@@ -3,13 +3,13 @@
 class HybridImport
 {
     protected $actions;
-    protected $allHybrids = array();
     protected $identifierElementId;
     protected $rebuildSiteTermsTable;
     protected $siteElementId;
+    protected $sourceRecords = array();
     protected $subjectElementId;
     protected $typeElementId;
-    protected $updatedHybrids = array();
+    protected $updatedHybridItems = array();
     protected $useCommonVocabulary;
     protected $vocabularyCommonTermsTable = null;
     protected $vocabularySiteTermsTable = null;
@@ -30,10 +30,10 @@ class HybridImport
         $this->typeElementId = ItemMetadata::getElementIdForElementName('Type');
         $this->siteElementId = ItemMetadata::getElementIdForElementName(HybridConfig::getOptionTextForSiteElement());
 
-        $this->logAction('ACTIONS:');
+        $this->logAction('');
     }
 
-    protected function addElementTexts($hybrid, $item)
+    protected function addElementTextsToHybridItem($hybrid, $item)
     {
         foreach ($hybrid['elements'] as $elementId => $text)
         {
@@ -56,7 +56,7 @@ class HybridImport
         }
     }
 
-    protected function addHybridImages($hybrid, $itemId)
+    protected function addImagesToHybridImagesTable($hybrid, $itemId)
     {
         $images = explode(';', $hybrid['properties']['<image>']);
         $thumbs = explode(';', $hybrid['properties']['<thumb>']);
@@ -75,7 +75,7 @@ class HybridImport
         }
     }
 
-    protected function addSiteLink($item, $hybrid, $siteElementId)
+    protected function addSiteLinkToHybridItem($item, $hybrid, $siteElementId)
     {
         if (empty($siteElementId))
             return;
@@ -91,16 +91,16 @@ class HybridImport
         $item->saveElementTexts();
     }
 
-    protected function createNewHybrid($hybridId, Item $item)
+    protected function createNewHybridItemsTableRecord($hybridId, Item $item)
     {
-        $newHybridItemRecord = new HybridItems();
-        $newHybridItemRecord['hybrid_id'] = $hybridId;
-        $newHybridItemRecord['item_id'] = $item->id;
-        if (!$newHybridItemRecord->save())
+        $newHybridItemsRecord = new HybridItems();
+        $newHybridItemsRecord['hybrid_id'] = $hybridId;
+        $newHybridItemsRecord['item_id'] = $item->id;
+        if (!$newHybridItemsRecord->save())
             throw new Exception($this->reportError(__FUNCTION__, ' save failed'));
     }
 
-    protected function createNewItem($hybrid)
+    protected function createNewOmekaItem($hybrid)
     {
         $nextIdentifier = AvantCommon::getNextIdentifier();
         $elementTexts = array(
@@ -122,18 +122,16 @@ class HybridImport
 
     protected function deleteDeletedHybridItems()
     {
-        $avantElasticsearchIndexBuilder = plugin_is_active('AvantElasticsearch') ? new AvantElasticsearchIndexBuilder() : null;
-
         // Delete items from the Hybrid Items table that are not in the hybrids list.
         $hybridIds = AvantHybrid::getAllHybridItemIds();
         foreach ($hybridIds as $id)
         {
             $hybridId = $id['hybrid_id'];
-            if (!in_array($hybridId, $this->allHybrids))
+            if (!in_array($hybridId, $this->sourceRecords))
             {
                 $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
                 $itemId = $hybridItemRecord['item_id'];
-                $this->deleteImages($itemId);
+                $this->deleteImagesFromHybridImagesTable($itemId);
                 $hybridItemRecord->delete();
                 $item = ItemMetadata::getItemFromId($itemId);
                 if ($item)
@@ -141,12 +139,13 @@ class HybridImport
                     // Delete the item and all of its element texts.
                     // This will also remove the item from the Elasticsearch indexes.
                     $item->delete();
+                    $this->logAction('Delete item' . $itemId);
                 }
             }
         }
     }
 
-    protected function deleteElementTexts($itemId, $identifierElementId)
+    protected function deleteHybridItemElementTexts($itemId, $identifierElementId)
     {
         // Delete element texts except Identifier element
         $elementTexts = AvantHybrid::getElementTextsForItem($itemId);
@@ -160,7 +159,7 @@ class HybridImport
         }
     }
 
-    protected function deleteImages($itemId)
+    protected function deleteImagesFromHybridImagesTable($itemId)
     {
         // Delete image and thumb urls in the Hybrid Images table
         $hybridImages = AvantHybrid::getImageRecords($itemId);
@@ -168,6 +167,12 @@ class HybridImport
         {
             $hybridImage->delete();
         }
+    }
+
+    protected function getResponse($success)
+    {
+        $status = $success ? "OK" : "FAIL";
+        return  $status . $this->actions;
     }
 
     protected function getValueForSubjectElement($text)
@@ -226,66 +231,78 @@ class HybridImport
         return $terms;
     }
 
+    protected function importSourceRecord($hybrid)
+    {
+
+        $hybridId = $hybrid['properties']['<hybrid-id>'];
+        $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
+
+        if ($hybridItemRecord)
+        {
+            $itemId = $hybridItemRecord['item_id'];
+            $item = $this->updateHybridItemModifiedDate($itemId, $hybrid);
+            if (!$item)
+            {
+                $this->logAction("No Omeka item found to update for item Id $itemId");
+                return true;
+            }
+
+            // Delete the hybrid's images.
+            $this->deleteImagesFromHybridImagesTable($itemId);
+
+            // Delete the item's element texts;
+            $this->deleteHybridItemElementTexts($itemId, $this->identifierElementId);
+
+            $this->logAction("Updated $hybridId as item $itemId");
+        }
+        else
+        {
+            // This is a new hybrid. Create an item for it and add it to the hybrids table.
+            $item = $this->createNewOmekaItem($hybrid);
+            $this->createNewHybridItemsTableRecord($hybridId, $item);
+            $this->logAction("Added $hybridId as item $item->id");
+        }
+
+        // Add image and thumb urls to the Hybrid Images table.
+        $this->addImagesToHybridImagesTable($hybrid, $item->id);
+
+        // Add element texts for element values
+        $this->addElementTextsToHybridItem($hybrid, $item);
+
+        // Set the <site> link
+        $this->addSiteLinkToHybridItem($item, $hybrid, $this->siteElementId);
+
+        // Call AvantElasticsearch to update indexes
+        if (plugin_is_active('AvantElasticsearch'))
+        {
+            $avantElasticsearchIndexBuilder = new AvantElasticsearchIndexBuilder();
+            $sharedIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_SHARE) == true;
+            $localIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_LOCAL) == true;
+            $avantElasticsearch = new AvantElasticsearch();
+            $avantElasticsearch->updateIndexForItem($item, $avantElasticsearchIndexBuilder, $sharedIndexIsEnabled, $localIndexIsEnabled);
+        }
+
+        return true;
+    }
+
     public function importSourceRecords()
     {
-        $result = $this->readSourceRecordsCsvFile();
-        if ($result != 'OK')
-            return $result;
+        if (!$this->readSourceRecordsCsvFile())
+            return $this->getResponse(false);
 
         // Delete any hybrid items in the Digital Archive that are no longer in the hybrid source database.
         $this->deleteDeletedHybridItems();
 
         // Apply updates to all hybrid items that were added to or changed in the source database.
-        foreach ($this->updatedHybrids as $hybrid)
+        foreach ($this->updatedHybridItems as $hybrid)
         {
-            $this->logAction($hybrid['properties']['<hybrid-id>']);
-
-            $hybridId = $hybrid['properties']['<hybrid-id>'];
-            $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
-
-            if ($hybridItemRecord)
-            {
-                $itemId = $hybridItemRecord['item_id'];
-                $item = $this->updateItem($itemId, $hybrid);
-                if (!$item)
-                    return "No item found for Id $itemId";
-
-                // Delete the hybrid's images.
-                $this->deleteImages($itemId);
-
-                // Delete the item's element texts;
-                $this->deleteElementTexts($itemId, $this->identifierElementId);
-            }
-            else
-            {
-                // This is a new hybrid. Create an item for it and add it to the hybrids table.
-                $item = $this->createNewItem($hybrid);
-                $this->createNewHybrid($hybridId, $item);
-            }
-
-            // Add image and thumb urls to the Hybrid Images table.
-            $this->addHybridImages($hybrid, $item->id);
-
-            // Add element texts for element values
-            $this->addElementTexts($hybrid, $item);
-
-            // Set the <site> link
-            $this->addSiteLink($item, $hybrid, $this->siteElementId);
-
-            // Call AvantElasticsearch to update indexes
-            if (plugin_is_active('AvantElasticsearch'))
-            {
-                $avantElasticsearchIndexBuilder = new AvantElasticsearchIndexBuilder();
-                $sharedIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_SHARE) == true;
-                $localIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_LOCAL) == true;
-                $avantElasticsearch = new AvantElasticsearch();
-                $avantElasticsearch->updateIndexForItem($item, $avantElasticsearchIndexBuilder, $sharedIndexIsEnabled, $localIndexIsEnabled);
-            }
+            if (!$this->importSourceRecord($hybrid))
+                return $this->getResponse(false);
         }
 
         $this->rebuildSiteTermsTable();
 
-        return $result . PHP_EOL . $this->actions;
+        return $this->getResponse(true);
     }
 
     protected function logAction($action)
@@ -297,12 +314,13 @@ class HybridImport
     protected function lookupTermInSiteTermsTable($kind, $commonTermId, $term)
     {
         $rebuild = true;
+
         if ($this->vocabularySiteTermsTable->siteTermExists(AvantVocabulary::KIND_SUBJECT, $term))
         {
             // The term is in the site terms table as a mapped or unmapped term.
             $rebuild = false;
         }
-        else
+        elseif ($commonTermId)
         {
             $results = $this->vocabularySiteTermsTable->getSiteTermRecordsByCommonTermId($commonTermId);
             if ($results)
@@ -312,7 +330,8 @@ class HybridImport
             }
         }
 
-        $this->rebuildSiteTermsTable = $rebuild;
+        if ($rebuild)
+            $this->rebuildSiteTermsTable = true;
     }
 
     protected function readSourceRecordsCsvFile()
@@ -344,7 +363,8 @@ class HybridImport
         }
         else
         {
-            return "File not found: $filepath";
+            $this->logAction("File not found: $filepath");
+            return false;
         }
 
         // Get the header row and the column for the timestamp.
@@ -360,7 +380,7 @@ class HybridImport
                 // Skip the header row.
                 continue;
 
-            $this->allHybrids[] = $csvRow[$hybridIdColumn];
+            $this->sourceRecords[] = $csvRow[$hybridIdColumn];
 
             if (!isset($csvRow[$timestampColumn]))
                 // Skip rows that have not been updated.
@@ -379,10 +399,10 @@ class HybridImport
                     $elements[$name] = $value;
             }
 
-            $this->updatedHybrids[$properties['<hybrid-id>']] = array('properties' => $properties, 'elements' => $elements);
+            $this->updatedHybridItems[$properties['<hybrid-id>']] = array('properties' => $properties, 'elements' => $elements);
         }
 
-        return 'OK';
+        return true;
     }
 
     protected function rebuildSiteTermsTable()
@@ -411,7 +431,7 @@ class HybridImport
         return "Exception in method $methodName(): $error";
     }
 
-    protected function updateItem($itemId, $hybrid)
+    protected function updateHybridItemModifiedDate($itemId, $hybrid)
     {
         $item = AvantCommon::fetchItemForRemoteRequest($itemId);
         if (!$item)
