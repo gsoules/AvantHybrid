@@ -2,6 +2,7 @@
 
 class HybridImport
 {
+    protected $actions;
     protected $allHybrids = array();
     protected $identifierElementId;
     protected $rebuildSiteTermsTable;
@@ -28,6 +29,8 @@ class HybridImport
         $this->subjectElementId = ItemMetadata::getElementIdForElementName('Subject');
         $this->typeElementId = ItemMetadata::getElementIdForElementName('Type');
         $this->siteElementId = ItemMetadata::getElementIdForElementName(HybridConfig::getOptionTextForSiteElement());
+
+        $this->logAction('ACTIONS:');
     }
 
     protected function addElementTexts($hybrid, $item)
@@ -235,6 +238,8 @@ class HybridImport
         // Apply updates to all hybrid items that were added to or changed in the source database.
         foreach ($this->updatedHybrids as $hybrid)
         {
+            $this->logAction($hybrid['properties']['<hybrid-id>']);
+
             $hybridId = $hybrid['properties']['<hybrid-id>'];
             $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
 
@@ -278,9 +283,15 @@ class HybridImport
             }
         }
 
-        $result = $this->rebuildSiteTermsTable();
+        $this->rebuildSiteTermsTable();
 
-        return $result;
+        return $result . PHP_EOL . $this->actions;
+    }
+
+    protected function logAction($action)
+    {
+        $newline = current_user() ? '<br/>' : PHP_EOL;
+        $this->actions .= $action . $newline;
     }
 
     protected function lookupTermInSiteTermsTable($kind, $commonTermId, $term)
@@ -376,20 +387,23 @@ class HybridImport
 
     protected function rebuildSiteTermsTable()
     {
-        $result = 'OK';
         if ($this->useCommonVocabulary && $this->rebuildSiteTermsTable)
         {
             try
             {
                 $tableBuilder = new AvantVocabularyTableBuilder();
                 $tableBuilder->buildSiteTermsTable();
+                $this->logAction('Rebuilt Common Vocabulary site terms table');
             }
             catch (Exception $e)
             {
-                $result = 'Common Vocabulary site terms table rebuild failed: ' . $e->getMessage();
+                $this->logAction('Common Vocabulary site terms table rebuild failed: ' . $e->getMessage());
             }
         }
-        return $result;
+        else
+        {
+            $this->logAction('Did not need to rebuild Common Vocabulary site terms table');
+        }
     }
 
     protected function reportError($methodName, $error)
