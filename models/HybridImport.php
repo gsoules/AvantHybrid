@@ -4,19 +4,25 @@ class HybridImport
 {
     protected $allHybrids = array();
     protected $identifierElementId;
+    protected $rebuildSiteTermsTable;
     protected $siteElementId;
     protected $subjectElementId;
     protected $typeElementId;
     protected $updatedHybrids = array();
     protected $useCommonVocabulary;
     protected $vocabularyCommonTermsTable = null;
+    protected $vocabularySiteTermsTable = null;
 
     function __construct()
     {
         $this->useCommonVocabulary = intval(get_option(HybridConfig::OPTION_HYBRID_USE_CV)) != 0;
+        $this->rebuildSiteTermsTable = false;
 
         if ($this->useCommonVocabulary && plugin_is_active('AvantVocabulary'))
+        {
             $this->vocabularyCommonTermsTable = get_db()->getTable('VocabularyCommonTerms');
+            $this->vocabularySiteTermsTable = get_db()->getTable('VocabularySiteTerms');
+        }
 
         $this->identifierElementId = ItemMetadata::getIdentifierElementId();
         $this->subjectElementId = ItemMetadata::getElementIdForElementName('Subject');
@@ -32,17 +38,11 @@ class HybridImport
                 continue;
 
             if ($this->useCommonVocabulary && $elementId == $this->typeElementId)
-            {
-                $texts = array($this->getValueForTypeElement($text, $this->vocabularyCommonTermsTable));
-            }
+                $texts = $this->getValueForTypeElement($text);
             elseif ($this->useCommonVocabulary && $elementId == $this->subjectElementId)
-            {
-                $texts = $this->getValueForSubjectElement($text, $this->vocabularyCommonTermsTable);
-            }
+                $texts = $this->getValueForSubjectElement($text);
             else
-            {
                 $texts = array($text);
-            }
 
             foreach ($texts as $value)
             {
@@ -167,40 +167,60 @@ class HybridImport
         }
     }
 
-    protected function getValueForSubjectElement($text, Omeka_Db_Table $vocabularyCommonTermsTable)
+    protected function getValueForSubjectElement($text)
     {
+        $terms = array();
         $texts = explode(';', $text);
-        if ($vocabularyCommonTermsTable)
-        {
-            foreach ($texts as $index => $subject)
-            {
-                $kind = AvantVocabulary::KIND_SUBJECT;
-                $commonTermRecord = $vocabularyCommonTermsTable->getCommonTermRecordByLeaf($kind, $subject);
-                if ($commonTermRecord)
-                {
-                    $texts[$index] = $commonTermRecord['common_term'];
-                }
-                else
-                {
-                    $texts[$index] = AvantVocabulary::normalizeSiteTerm(AvantVocabulary::KIND_SUBJECT, $subject);
-                }
-            }
-        }
-        return $texts;
-    }
 
-    protected function getValueForTypeElement($text, Omeka_Db_Table $vocabularyCommonTermsTable)
-    {
-        if ($vocabularyCommonTermsTable)
+        foreach ($texts as $subject)
         {
-            $kind = AvantVocabulary::KIND_TYPE;
-            $commonTermRecord = $vocabularyCommonTermsTable->getCommonTermRecordByLeaf($kind, $text);
+            $kind = AvantVocabulary::KIND_SUBJECT;
+            $commonTermRecord = $this->vocabularyCommonTermsTable->getCommonTermRecordByLeaf($kind, $subject);
+            $commonTermId = 0;
+
             if ($commonTermRecord)
             {
-                $text = $commonTermRecord['common_term'];
+                // The text matches the leaf of a common Subject term.
+                $term = $commonTermRecord['common_term'];
+                $commonTermId = $commonTermRecord['common_term_id'];
             }
+            else
+            {
+                // Create an 'Other' Subject term.
+                $normalizedTerm = AvantVocabulary::normalizeSiteTerm($kind, $subject);
+                $term = "Other, $normalizedTerm";
+
+            }
+
+            $this->lookupTermInSiteTermsTable($kind, $commonTermId, $term);
+            $terms[] = $term;
         }
-        return $text;
+
+        return $terms;
+    }
+
+    protected function getValueForTypeElement($text)
+    {
+        $kind = AvantVocabulary::KIND_TYPE;
+        $commonTermRecord = $this->vocabularyCommonTermsTable->getCommonTermRecordByLeaf($kind, $text);
+        $commonTermId = 0;
+
+        if ($commonTermRecord)
+        {
+            // The text matches the leaf of a common Type term.
+            $term = $commonTermRecord['common_term'];
+            $commonTermId = $commonTermRecord['common_term_id'];
+        }
+        else
+        {
+            // Create an 'Other' Type term.
+            $term = "Other, $text";
+        }
+
+        $this->lookupTermInSiteTermsTable($kind, $commonTermId, $term);
+
+        $terms = array($term);
+        return $terms;
     }
 
     public function importSourceRecords()
@@ -258,7 +278,30 @@ class HybridImport
             }
         }
 
+        $result = $this->rebuildSiteTermsTable();
+
         return $result;
+    }
+
+    protected function lookupTermInSiteTermsTable($kind, $commonTermId, $term)
+    {
+        $rebuild = true;
+        if ($this->vocabularySiteTermsTable->siteTermExists(AvantVocabulary::KIND_SUBJECT, $term))
+        {
+            // The term is in the site terms table as a mapped or unmapped term.
+            $rebuild = false;
+        }
+        else
+        {
+            $results = $this->vocabularySiteTermsTable->getSiteTermRecordsByCommonTermId($commonTermId);
+            if ($results)
+            {
+                // The term is in the site terms table as a common term.
+                $rebuild = false;
+            }
+        }
+
+        $this->rebuildSiteTermsTable = $rebuild;
     }
 
     protected function readSourceRecordsCsvFile()
@@ -329,6 +372,24 @@ class HybridImport
         }
 
         return 'OK';
+    }
+
+    protected function rebuildSiteTermsTable()
+    {
+        $result = 'OK';
+        if ($this->useCommonVocabulary && $this->rebuildSiteTermsTable)
+        {
+            try
+            {
+                $tableBuilder = new AvantVocabularyTableBuilder();
+                $tableBuilder->buildSiteTermsTable();
+            }
+            catch (Exception $e)
+            {
+                $result = 'Common Vocabulary site terms table rebuild failed: ' . $e->getMessage();
+            }
+        }
+        return $result;
     }
 
     protected function reportError($methodName, $error)
