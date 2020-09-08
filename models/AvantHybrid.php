@@ -12,7 +12,7 @@ class AvantHybrid
         return get_db()->getTable('HybridItems')->getAllHybridItemIds();
     }
 
-    public static function getElementTextsForItem($itemId)
+    public static function getElementTextsForOmekaItem($itemId)
     {
         $db = get_db();
 
@@ -41,6 +41,16 @@ class AvantHybrid
         return $hybridImageRecord['thumb'];
     }
 
+    public static function getHybridItemsRecord($hybridId)
+    {
+        return get_db()->getTable('HybridItems')->getHybridItemsRecordByHybridId($hybridId);
+    }
+
+    public static function getHybridItemsRecordForOmekaItem($itemId)
+    {
+        return get_db()->getTable('HybridItems')->getHybridItemsRecordByItemId($itemId);
+    }
+
     public static function getImageHtml($item, $hybridImageRecord, $isThumbnail = false, $index = 0)
     {
         $imageUrl = self::getImageUrl($hybridImageRecord);
@@ -54,16 +64,6 @@ class AvantHybrid
     public static function getImageRecords($itemId)
     {
         return get_db()->getTable('HybridImages')->getHybridImageRecordsByItemId($itemId);
-    }
-
-    public static function getItemRecord($hybridId)
-    {
-        return get_db()->getTable('HybridItems')->getHybridItemsRecordByHybridId($hybridId);
-    }
-
-    public static function getItemRecordForItem($itemId)
-    {
-        return get_db()->getTable('HybridItems')->getHybridItemsRecordByItemId($itemId);
     }
 
     public static function getImageUrl($hybridImageRecord)

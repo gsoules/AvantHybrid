@@ -127,10 +127,34 @@ class HybridImport
         return $item;
     }
 
-    protected function deleteDeletedHybridItems()
+    public function deleteHybridItem($hybridId)
     {
-        // Delete items from the Hybrid Items table that are not in the hybrids list.
+        $hybridItemRecord = AvantHybrid::getHybridItemsRecord($hybridId);
+        $itemId = $hybridItemRecord['item_id'];
+        $this->deleteImagesFromHybridImagesTable($itemId);
+        $hybridItemRecord->delete();
+        return $itemId;
+    }
+
+    protected function deleteHybridItemElementTexts($itemId, $identifierElementId)
+    {
+        // Delete element texts except Identifier element
+        $elementTexts = AvantHybrid::getElementTextsForOmekaItem($itemId);
+        foreach ($elementTexts as $elementText)
+        {
+            if ($elementText['element_id'] == $identifierElementId)
+            {
+                continue;
+            }
+            $elementText->delete();
+        }
+    }
+
+    protected function deleteHybridItemsForDeletedSourceRecords()
+    {
+        // Delete items from the Hybrid Items table that are no longer in the source records.
         $hybridIds = AvantHybrid::getAllHybridItemIds();
+
         foreach ($hybridIds as $id)
         {
             $hybridId = $id['hybrid_id'];
@@ -151,29 +175,6 @@ class HybridImport
                     $this->logAction('Deleted item ' . $itemId);
                 }
             }
-        }
-    }
-
-    public function deleteHybridItem($hybridId)
-    {
-        $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
-        $itemId = $hybridItemRecord['item_id'];
-        $this->deleteImagesFromHybridImagesTable($itemId);
-        $hybridItemRecord->delete();
-        return $itemId;
-    }
-
-    protected function deleteHybridItemElementTexts($itemId, $identifierElementId)
-    {
-        // Delete element texts except Identifier element
-        $elementTexts = AvantHybrid::getElementTextsForItem($itemId);
-        foreach ($elementTexts as $elementText)
-        {
-            if ($elementText['element_id'] == $identifierElementId)
-            {
-                continue;
-            }
-            $elementText->delete();
         }
     }
 
@@ -252,13 +253,13 @@ class HybridImport
     protected function importSourceRecord($sourceRecord)
     {
         $hybridId = $sourceRecord['properties']['<hybrid-id>'];
-        $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
+        $hybridItemRecord = AvantHybrid::getHybridItemsRecord($hybridId);
 
         $item = null;
         if ($hybridItemRecord)
         {
             $itemId = $hybridItemRecord['item_id'];
-            $item = $this->updateHybridItemModifiedDate($itemId, $sourceRecord);
+            $item = AvantCommon::fetchItemForRemoteRequest($itemId);
 
             if ($item)
             {
@@ -305,6 +306,9 @@ class HybridImport
             $avantElasticsearch->updateIndexForItem($item, $avantElasticsearchIndexBuilder, $sharedIndexIsEnabled, $localIndexIsEnabled);
         }
 
+        $public = $sourceRecord['properties']['<public>'] == '1';
+        $this->updateOmekaItemModifiedDate($item, $public);
+
         return true;
     }
 
@@ -314,7 +318,7 @@ class HybridImport
             return $this->getResponse(false);
 
         // Delete any hybrid items in the Digital Archive that are no longer in the hybrid source database.
-        $this->deleteDeletedHybridItems();
+        $this->deleteHybridItemsForDeletedSourceRecords();
 
         // Apply updates to all hybrid items that were added to or changed in the source database.
         foreach ($this->updatedHybridItems as $hybrid)
@@ -443,10 +447,6 @@ class HybridImport
                 $this->logAction('Common Vocabulary site terms table rebuild failed: ' . $e->getMessage());
             }
         }
-        else
-        {
-            $this->logAction('Did not need to rebuild Common Vocabulary site terms table');
-        }
     }
 
     protected function reportError($methodName, $error)
@@ -454,13 +454,8 @@ class HybridImport
         return "Exception in method $methodName(): $error";
     }
 
-    protected function updateHybridItemModifiedDate($itemId, $hybrid)
+    protected function updateOmekaItemModifiedDate($item, $public)
     {
-        $item = AvantCommon::fetchItemForRemoteRequest($itemId);
-        if (!$item)
-            return null;
-
-        $public = $hybrid['properties']['<public>'] == '1';
         if ($item->public != $public)
             $item['public'] = $public;
 
@@ -471,7 +466,5 @@ class HybridImport
 
         if (!$item->save())
             throw new Exception($this->reportError(__FUNCTION__, ' save failed'));
-
-        return $item;
     }
 }

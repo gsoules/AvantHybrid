@@ -31,9 +31,9 @@ class AvantHybridPlugin extends Omeka_Plugin_AbstractPlugin
         }
 
         // The Omeka item for a hybrid source record is getting deleted by the admin for some reason.
-        // Delete the source record information so that we are not left with a ghost hybrid record.
+        // Delete the source record information so that we are not left with a ghost hybrid item.
         $item = $args['record'];
-        $hybridItemRecord = AvantHybrid::getItemRecordForItem($item->id);
+        $hybridItemRecord = AvantHybrid::getHybridItemsRecordForOmekaItem($item->id);
         if ($hybridItemRecord)
         {
             $hybridImport = new HybridImport();
