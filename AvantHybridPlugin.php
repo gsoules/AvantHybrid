@@ -4,6 +4,7 @@ class AvantHybridPlugin extends Omeka_Plugin_AbstractPlugin
 {
     protected $_hooks = array(
         'admin_head',
+        'after_delete_item',
         'config',
         'config_form',
         'install',
@@ -19,6 +20,25 @@ class AvantHybridPlugin extends Omeka_Plugin_AbstractPlugin
     public function hookAdminHead($args)
     {
         queue_css_file('avanthybrid-admin');
+    }
+
+    public function hookAfterDeleteItem($args)
+    {
+        if (AvantHybrid::deletingHybridItem())
+        {
+            // This method is getting called because HybridImport is deleting an item. Do nothing here.
+            return;
+        }
+
+        // The Omeka item for a hybrid source record is getting deleted by the admin for some reason.
+        // Delete the source record information so that we are not left with a ghost hybrid record.
+        $item = $args['record'];
+        $hybridItemRecord = AvantHybrid::getItemRecordForItem($item->id);
+        if ($hybridItemRecord)
+        {
+            $hybridImport = new HybridImport();
+            $hybridImport->deleteHybridItem($hybridItemRecord['hybrid_id']);
+        }
     }
 
     public function hookConfig()

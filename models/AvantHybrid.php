@@ -2,6 +2,11 @@
 
 class AvantHybrid
 {
+    public static function deletingHybridItem()
+    {
+        return isset($_SESSION[HybridImport::OPTION_HYBRID_IMPORT_DELETING_ITEM]) && $_SESSION[HybridImport::OPTION_HYBRID_IMPORT_DELETING_ITEM];
+    }
+
     public static function getAllHybridItemIds()
     {
         return get_db()->getTable('HybridItems')->getAllHybridItemIds();
@@ -54,6 +59,11 @@ class AvantHybrid
     public static function getItemRecord($hybridId)
     {
         return get_db()->getTable('HybridItems')->getHybridItemsRecordByHybridId($hybridId);
+    }
+
+    public static function getItemRecordForItem($itemId)
+    {
+        return get_db()->getTable('HybridItems')->getHybridItemsRecordByItemId($itemId);
     }
 
     public static function getImageUrl($hybridImageRecord)

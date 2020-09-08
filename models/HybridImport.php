@@ -136,7 +136,7 @@ class HybridImport
             $hybridId = $id['hybrid_id'];
             if (!in_array($hybridId, $this->sourceRecords))
             {
-                $itemId = $this->deleteHybridItemImagesAndRecord($hybridId);
+                $itemId = $this->deleteHybridItem($hybridId);
                 $item = ItemMetadata::getItemFromId($itemId);
                 if ($item)
                 {
@@ -154,6 +154,15 @@ class HybridImport
         }
     }
 
+    public function deleteHybridItem($hybridId)
+    {
+        $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
+        $itemId = $hybridItemRecord['item_id'];
+        $this->deleteImagesFromHybridImagesTable($itemId);
+        $hybridItemRecord->delete();
+        return $itemId;
+    }
+
     protected function deleteHybridItemElementTexts($itemId, $identifierElementId)
     {
         // Delete element texts except Identifier element
@@ -166,15 +175,6 @@ class HybridImport
             }
             $elementText->delete();
         }
-    }
-
-    protected function deleteHybridItemImagesAndRecord($hybridId)
-    {
-        $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
-        $itemId = $hybridItemRecord['item_id'];
-        $this->deleteImagesFromHybridImagesTable($itemId);
-        $hybridItemRecord->delete();
-        return $itemId;
     }
 
     protected function deleteImagesFromHybridImagesTable($itemId)
@@ -254,6 +254,7 @@ class HybridImport
         $hybridId = $sourceRecord['properties']['<hybrid-id>'];
         $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
 
+        $item = null;
         if ($hybridItemRecord)
         {
             $itemId = $hybridItemRecord['item_id'];
@@ -271,17 +272,17 @@ class HybridImport
             }
             else
             {
-                // This source record is in the hybrid items table, but has no corresponding item. Someone must have
-                // deleted the item in Omeka. Clean up any traces of it and then let the item get created again below.
+                // This source record is in the hybrid items table, but has no corresponding item.
+                // This should never happen, but if it does, clean up the ghost record and report it.
+                // Then fall through to let the hybrid item get created again.
+                $this->deleteHybridItem($hybridId);
                 $this->logAction("No Omeka item found to update for hybrid ID $hybridId.");
-                $this->deleteHybridItemImagesAndRecord($hybridId);
             }
         }
 
         if (!$item)
         {
-            // This is either a new source record, or it's the record for an item that got deleted in Omeka.
-            // Create a new hybrid item for it and add it to the hybrids table.
+            // Create a new hybrid item and add it to the hybrids table.
             $item = $this->createNewHybridItemsRecord($sourceRecord, $hybridId);
         }
 

@@ -18,4 +18,12 @@ class Table_HybridItems extends Omeka_Db_Table
         $result = $this->fetchObject($select);
         return $result;
     }
+
+    public function getHybridItemsRecordByItemId($itemId)
+    {
+        $select = $this->getSelect();
+        $select->where("item_id = '$itemId'");
+        $result = $this->fetchObject($select);
+        return $result;
+    }
 }
