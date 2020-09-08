@@ -1,20 +1,24 @@
 <?php
 
-define('CONFIG_LABEL_DELETE_HYBRID_TABLE', __('Delete Tables'));
 define('CONFIG_LABEL_HYBRID_COLUMN_MAPPING', __('Column Mapping'));
+define('CONFIG_LABEL_DELETE_HYBRID_TABLE', __('Delete Tables'));
 define('CONFIG_LABEL_HYBRID_IMAGE_URL', __('Image URL'));
+define('CONFIG_LABEL_HYBRID_IMPORT_ID', __('Import ID'));
+define('CONFIG_LABEL_HYBRID_IMPORT_PW', __('Import Password'));
 define('CONFIG_LABEL_HYBRID_SITE_ELEMENT', __('Site Element'));
 define('CONFIG_LABEL_HYBRID_SITE_URL', __('Site URL'));
-define('CONFIG_LABEL_HYBRID_SYNC_PW', __('Syncronization Password'));
+define('CONFIG_LABEL_HYBRID_USE_CV', __('Use Common Vocabulary'));
 
 class HybridConfig extends ConfigOptions
 {
-    const OPTION_DELETE_HYBRID_TABLE = 'avanthybrid_delete_table';
     const OPTION_HYBRID_COLUMN_MAPPING = 'avanthybrid_column_mapping';
+    const OPTION_DELETE_HYBRID_TABLE = 'avanthybrid_delete_table';
     const OPTION_HYBRID_IMAGE_URL = 'avanthybrid_image_url';
+    const OPTION_HYBRID_IMPORT_ID = 'avanthybrid_import_id';
+    const OPTION_HYBRID_IMPORT_PW = 'avanthybrid_import_pw';
     const OPTION_HYBRID_SITE_ELEMENT = 'avanthybrid_site_element';
     const OPTION_HYBRID_SITE_URL = 'avanthybrid_site_url';
-    const OPTION_HYBRID_SYNC_PW = 'avanthybrid_sync_pw';
+    const OPTION_HYBRID_USE_CV = 'avanthybrid_use_cv';
 
     public static function getOptionDataForColumnMappingField()
     {
@@ -69,6 +73,24 @@ class HybridConfig extends ConfigOptions
         return $text;
     }
 
+    public static function getOptionTextForImportId()
+    {
+        if (self::configurationErrorsDetected())
+            $text = $_POST[self::OPTION_HYBRID_IMPORT_ID];
+        else
+            $text = get_option(HybridConfig::OPTION_HYBRID_IMPORT_ID);
+        return $text;
+    }
+
+    public static function getOptionTextForImportPassword()
+    {
+        if (self::configurationErrorsDetected())
+            $text = $_POST[self::OPTION_HYBRID_IMPORT_PW];
+        else
+            $text = get_option(HybridConfig::OPTION_HYBRID_IMPORT_PW);
+        return $text;
+    }
+
     public static function getOptionTextForSiteElement()
     {
         if (self::configurationErrorsDetected())
@@ -80,15 +102,6 @@ class HybridConfig extends ConfigOptions
             $elementId = get_option(self::OPTION_HYBRID_SITE_ELEMENT);
             $text = ItemMetadata::getElementNameFromId($elementId);
         }
-        return $text;
-    }
-
-    public static function getOptionTextForSyncPassword()
-    {
-        if (self::configurationErrorsDetected())
-            $text = $_POST[self::OPTION_HYBRID_SYNC_PW];
-        else
-            $text = get_option(HybridConfig::OPTION_HYBRID_SYNC_PW);
         return $text;
     }
 
@@ -113,12 +126,19 @@ class HybridConfig extends ConfigOptions
     public static function saveConfiguration()
     {
         set_option(self::OPTION_DELETE_HYBRID_TABLE, (int)(boolean)$_POST[self::OPTION_DELETE_HYBRID_TABLE]);
+        set_option(self::OPTION_HYBRID_USE_CV, (int)(boolean)$_POST[self::OPTION_HYBRID_USE_CV]);
 
-        $pw = $_POST[self::OPTION_HYBRID_SYNC_PW];
-        if (strlen($pw) == 8 && ctype_alnum($pw))
-            set_option(self::OPTION_HYBRID_SYNC_PW, $pw);
+        $id = $_POST[self::OPTION_HYBRID_IMPORT_ID];
+        if (strlen($id) >= 3 && strlen($id) <= 6 && ctype_alpha($id))
+            set_option(self::OPTION_HYBRID_IMPORT_ID, $id);
         else
-            self::errorIf(true, CONFIG_LABEL_HYBRID_SYNC_PW, __('Password must be 8 alphanumeric characters'));
+            self::errorIf(true, CONFIG_LABEL_HYBRID_IMPORT_ID, __('ID must be 3 - 6 alpha characters'));
+
+        $pw = $_POST[self::OPTION_HYBRID_IMPORT_PW];
+        if (strlen($pw) == 8 && ctype_alnum($pw))
+            set_option(self::OPTION_HYBRID_IMPORT_PW, $pw);
+        else
+            self::errorIf(true, CONFIG_LABEL_HYBRID_IMPORT_PW, __('Password must be 8 alphanumeric characters'));
 
         $imageUrl = $_POST[self::OPTION_HYBRID_IMAGE_URL];
         if (substr( $imageUrl, -1 ) != '/')

@@ -78,15 +78,16 @@ class AvantHybrid
 
     public static function handleRemoteRequest($action, $siteId, $password)
     {
-        $pw = HybridConfig::getOptionTextForSyncPassword();
+        $id = HybridConfig::getOptionTextForImportId();
+        $pw = HybridConfig::getOptionTextForImportPassword();
 
-        if ($password == $pw)
+        if ($siteId == $id && $password == $pw)
         {
             switch ($action)
             {
-                case 'hybrid-update':
-                    $hybridSync = new HybridSync();
-                    $response = $hybridSync->syncHybridItemsWithUpdates();
+                case 'hybrid-import':
+                    $hybridImport = new HybridImport();
+                    $response = $hybridImport->importSourceRecords();
                     break;
 
                 default:

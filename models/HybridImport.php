@@ -1,24 +1,43 @@
 <?php
 
-class HybridSync
+class HybridImport
 {
     protected $allHybrids = array();
+    protected $identifierElementId;
+    protected $siteElementId;
+    protected $subjectElementId;
+    protected $typeElementId;
     protected $updatedHybrids = array();
+    protected $useCommonVocabulary;
+    protected $vocabularyCommonTermsTable = null;
 
-    protected function addElementTexts($hybrid, $item, $typeElementId, $subjectElementId, Omeka_Db_Table $vocabularyCommonTermsTable)
+    function __construct()
+    {
+        $this->useCommonVocabulary = intval(get_option(HybridConfig::OPTION_HYBRID_USE_CV)) != 0;
+
+        if ($this->useCommonVocabulary && plugin_is_active('AvantVocabulary'))
+            $this->vocabularyCommonTermsTable = get_db()->getTable('VocabularyCommonTerms');
+
+        $this->identifierElementId = ItemMetadata::getIdentifierElementId();
+        $this->subjectElementId = ItemMetadata::getElementIdForElementName('Subject');
+        $this->typeElementId = ItemMetadata::getElementIdForElementName('Type');
+        $this->siteElementId = ItemMetadata::getElementIdForElementName(HybridConfig::getOptionTextForSiteElement());
+    }
+
+    protected function addElementTexts($hybrid, $item)
     {
         foreach ($hybrid['elements'] as $elementId => $text)
         {
             if (empty($text))
                 continue;
 
-            if ($elementId == $typeElementId)
+            if ($this->useCommonVocabulary && $elementId == $this->typeElementId)
             {
-                $texts = array($this->getValueForTypeElement($text, $vocabularyCommonTermsTable));
+                $texts = array($this->getValueForTypeElement($text, $this->vocabularyCommonTermsTable));
             }
-            elseif ($elementId == $subjectElementId)
+            elseif ($this->useCommonVocabulary && $elementId == $this->subjectElementId)
             {
-                $texts = $this->getValueForSubjectElement($text, $vocabularyCommonTermsTable);
+                $texts = $this->getValueForSubjectElement($text, $this->vocabularyCommonTermsTable);
             }
             else
             {
@@ -184,7 +203,65 @@ class HybridSync
         return $text;
     }
 
-    protected function readHybridCsvFile()
+    public function importSourceRecords()
+    {
+        $result = $this->readSourceRecordsCsvFile();
+        if ($result != 'OK')
+            return $result;
+
+        // Delete any hybrid items in the Digital Archive that are no longer in the hybrid source database.
+        $this->deleteDeletedHybridItems();
+
+        // Apply updates to all hybrid items that were added to or changed in the source database.
+        foreach ($this->updatedHybrids as $hybrid)
+        {
+            $hybridId = $hybrid['properties']['<hybrid-id>'];
+            $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
+
+            if ($hybridItemRecord)
+            {
+                $itemId = $hybridItemRecord['item_id'];
+                $item = $this->updateItem($itemId, $hybrid);
+                if (!$item)
+                    return "No item found for Id $itemId";
+
+                // Delete the hybrid's images.
+                $this->deleteImages($itemId);
+
+                // Delete the item's element texts;
+                $this->deleteElementTexts($itemId, $this->identifierElementId);
+            }
+            else
+            {
+                // This is a new hybrid. Create an item for it and add it to the hybrids table.
+                $item = $this->createNewItem($hybrid);
+                $this->createNewHybrid($hybridId, $item);
+            }
+
+            // Add image and thumb urls to the Hybrid Images table.
+            $this->addHybridImages($hybrid, $item->id);
+
+            // Add element texts for element values
+            $this->addElementTexts($hybrid, $item);
+
+            // Set the <site> link
+            $this->addSiteLink($item, $hybrid, $this->siteElementId);
+
+            // Call AvantElasticsearch to update indexes
+            if (plugin_is_active('AvantElasticsearch'))
+            {
+                $avantElasticsearchIndexBuilder = new AvantElasticsearchIndexBuilder();
+                $sharedIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_SHARE) == true;
+                $localIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_LOCAL) == true;
+                $avantElasticsearch = new AvantElasticsearch();
+                $avantElasticsearch->updateIndexForItem($item, $avantElasticsearchIndexBuilder, $sharedIndexIsEnabled, $localIndexIsEnabled);
+            }
+        }
+
+        return $result;
+    }
+
+    protected function readSourceRecordsCsvFile()
     {
         // Get the path to the file containing the hybrid data.
         if (AvantCommon::userIsSuper())
@@ -257,72 +334,6 @@ class HybridSync
     protected function reportError($methodName, $error)
     {
         return "Exception in method $methodName(): $error";
-    }
-
-    public function syncHybridItemsWithUpdates()
-    {
-        $result = $this->readHybridCsvFile();
-        if ($result != 'OK')
-            return $result;
-
-        // Delete any hybrid items in the Digital Archive that are no longer in the hybrid source database.
-        $this->deleteDeletedHybridItems();
-
-        // Get values that will be used repeatedly in the loop below.
-        $identifierElementId = ItemMetadata::getIdentifierElementId();
-        $subjectElementId = ItemMetadata::getElementIdForElementName('Subject');
-        $typeElementId = ItemMetadata::getElementIdForElementName('Type');
-        $siteElementId = ItemMetadata::getElementIdForElementName(HybridConfig::getOptionTextForSiteElement());
-
-        $vocabularyCommonTermsTable = plugin_is_active('AvantVocabulary') ? get_db()->getTable('VocabularyCommonTerms') : null;
-
-        // Apply updates to all hybrid items that were added to or changed in the source database.
-        foreach ($this->updatedHybrids as $hybrid)
-        {
-            $hybridId = $hybrid['properties']['<hybrid-id>'];
-            $hybridItemRecord = AvantHybrid::getItemRecord($hybridId);
-
-            if ($hybridItemRecord)
-            {
-                $itemId = $hybridItemRecord['item_id'];
-                $item = $this->updateItem($itemId, $hybrid);
-                if (!$item)
-                    return "No item found for Id $itemId";
-
-                // Delete the hybrid's images.
-                $this->deleteImages($itemId);
-
-                // Delete the item's element texts;
-                $this->deleteElementTexts($itemId, $identifierElementId);
-            }
-            else
-            {
-                // This is a new hybrid. Create an item for it and add it to the hybrids table.
-                $item = $this->createNewItem($hybrid);
-                $this->createNewHybrid($hybridId, $item);
-            }
-
-            // Add image and thumb urls to the Hybrid Images table.
-            $this->addHybridImages($hybrid, $item->id);
-
-            // Add element texts for element values
-            $this->addElementTexts($hybrid, $item, $typeElementId, $subjectElementId, $vocabularyCommonTermsTable);
-
-            // Set the <site> link
-            $this->addSiteLink($item, $hybrid, $siteElementId);
-
-            // Call AvantElasticsearch to update indexes
-            if (plugin_is_active('AvantElasticsearch'))
-            {
-                $avantElasticsearchIndexBuilder = new AvantElasticsearchIndexBuilder();
-                $sharedIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_SHARE) == true;
-                $localIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_LOCAL) == true;
-                $avantElasticsearch = new AvantElasticsearch();
-                $avantElasticsearch->updateIndexForItem($item, $avantElasticsearchIndexBuilder, $sharedIndexIsEnabled, $localIndexIsEnabled);
-            }
-        }
-
-        return $result;
     }
 
     protected function updateItem($itemId, $hybrid)

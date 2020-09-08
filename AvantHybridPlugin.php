@@ -35,6 +35,8 @@ class AvantHybridPlugin extends Omeka_Plugin_AbstractPlugin
     {
         HybridTableFactory::createHybridItemsTable();
         HybridTableFactory::createHybridImagesTable();
+
+        set_option(HybridConfig::OPTION_HYBRID_USE_CV, 1);
     }
 
     public function hookPublicHead($args)
