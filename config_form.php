@@ -4,11 +4,11 @@ $view = get_view();
 $columnMappingField = HybridConfig::getOptionTextForColumnMappingField();
 $columnMappingFieldRows = max(2, count(explode(PHP_EOL, $columnMappingField)));
 $deleteTable = intval(get_option(HybridConfig::OPTION_DELETE_HYBRID_TABLE)) != 0;
-$imageUrl = get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL);
+$imageUrl = HybridConfig::getOptionTextForImageUrl();
 $importId = HybridConfig::getOptionTextForImportId();
 $importPw = HybridConfig::getOptionTextForImportPassword();
 $siteElement = HybridConfig::getOptionTextForSiteElement();
-$siteUrl = get_option(HybridConfig::OPTION_HYBRID_SITE_URL);
+$siteUrl = HybridConfig::getOptionTextForSiteUrl();
 $useCommonVocabulary = intval(get_option(HybridConfig::OPTION_HYBRID_USE_CV)) != 0;
 ?>
 

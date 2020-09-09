@@ -12,7 +12,6 @@ class HybridImport
     protected $countUnmappedType;
     protected $countUpdated;
     protected $identifierElementId;
-    protected $rebuildSiteTermsTable;
     protected $siteElementId;
     protected $sourceRecords = array();
     protected $subjectElementId;
@@ -25,7 +24,6 @@ class HybridImport
     function __construct()
     {
         $this->useCommonVocabulary = plugin_is_active('AvantVocabulary') && intval(get_option(HybridConfig::OPTION_HYBRID_USE_CV)) != 0;
-        $this->rebuildSiteTermsTable = false;
 
         if ($this->useCommonVocabulary)
         {
@@ -345,8 +343,6 @@ class HybridImport
 
         $this->logStatistics();
 
-        $this->rebuildSiteTermsTable();
-
         return $this->getResponse(true);
     }
 
@@ -370,12 +366,12 @@ class HybridImport
 
     protected function lookupTermInSiteTermsTable($kind, $commonTermId, $term)
     {
-        $rebuild = true;
+        $addSiteTerm = true;
 
         if ($this->vocabularySiteTermsTable->siteTermExists($kind, $term))
         {
             // The term is in the site terms table as a mapped or unmapped term.
-            $rebuild = false;
+            $addSiteTerm = false;
         }
         elseif ($commonTermId)
         {
@@ -383,12 +379,15 @@ class HybridImport
             if ($results)
             {
                 // The term is in the site terms table as a common term.
-                $rebuild = false;
+                $addSiteTerm = false;
             }
         }
 
-        if ($rebuild)
-            $this->rebuildSiteTermsTable = true;
+        if ($addSiteTerm)
+        {
+            AvantVocabulary::addNewUnmappedSiteTerm($kind, $term);
+            $this->logAction("Added unmapped site term '$term' (kind = $kind)");
+        }
     }
 
     protected function readSourceRecordsCsvFile()
@@ -428,7 +427,10 @@ class HybridImport
         $this->logAction("Read $count source records from $filepath");
 
         // Get the header row and the column for the timestamp.
-        $header = $csvRows[0];
+        $header = $this->validateHeaderRow($csvRows[0]);
+        if (!$header)
+            return false;
+
         $hybridIdColumn = array_search(array_search('<hybrid-id>', $map), $header);
         $timestampColumn = array_search(array_search('<timestamp>', $map), $header);
 
@@ -465,23 +467,6 @@ class HybridImport
         return true;
     }
 
-    protected function rebuildSiteTermsTable()
-    {
-        if ($this->useCommonVocabulary && $this->rebuildSiteTermsTable)
-        {
-            try
-            {
-                $tableBuilder = new AvantVocabularyTableBuilder();
-                $tableBuilder->buildSiteTermsTable();
-                $this->logAction('Rebuilt Common Vocabulary site terms table');
-            }
-            catch (Exception $e)
-            {
-                $this->logAction('Common Vocabulary site terms table rebuild failed: ' . $e->getMessage());
-            }
-        }
-    }
-
     protected function reportError($methodName, $error)
     {
         return "Exception in method $methodName(): $error";
@@ -503,5 +488,25 @@ class HybridImport
 
         if (!$saved)
             throw new Exception($this->reportError(__FUNCTION__, ' save failed'));
+    }
+
+    protected function validateHeaderRow($headerRow)
+    {
+        $header = $headerRow;
+
+        // Verify that the file is UTF-8 and remove the BOM from the first column of the first row.
+        $column0Row0 = $header[0];
+        $bom = pack("CCC", 0xef, 0xbb, 0xbf);
+        if (0 === strncmp($column0Row0, $bom, 3))
+        {
+            // BOM detected - file is UTF-8.
+            $header[0] = str_replace("\xEF\xBB\xBF", '', $column0Row0);
+            return $header;
+        }
+        else
+        {
+            $this->logAction("CSV file is not in UTF-8 format");
+            return null;
+        }
     }
 }

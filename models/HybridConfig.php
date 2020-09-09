@@ -73,6 +73,15 @@ class HybridConfig extends ConfigOptions
         return $text;
     }
 
+    public static function getOptionTextForImageUrl()
+    {
+        if (self::configurationErrorsDetected())
+            $text = $_POST[self::OPTION_HYBRID_IMAGE_URL];
+        else
+            $text = get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL);
+        return $text;
+    }
+
     public static function getOptionTextForImportId()
     {
         if (self::configurationErrorsDetected())
@@ -102,6 +111,15 @@ class HybridConfig extends ConfigOptions
             $elementId = get_option(self::OPTION_HYBRID_SITE_ELEMENT);
             $text = ItemMetadata::getElementNameFromId($elementId);
         }
+        return $text;
+    }
+
+    public static function getOptionTextForSiteUrl()
+    {
+        if (self::configurationErrorsDetected())
+            $text = $_POST[self::OPTION_HYBRID_SITE_URL];
+        else
+            $text = get_option(HybridConfig::OPTION_HYBRID_SITE_URL);
         return $text;
     }
 

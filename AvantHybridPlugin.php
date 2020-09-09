@@ -97,7 +97,7 @@ class AvantHybridPlugin extends Omeka_Plugin_AbstractPlugin
 
     public function hookUninstall()
     {
-        $deleteTables = intval(get_option(HybridConfig::OPTION_DELETE_HYBRID_TABLE))== 1;
+        $deleteTables = intval(get_option(HybridConfig::OPTION_DELETE_HYBRID_TABLE)) == 1;
         if (!$deleteTables)
             return;
 
