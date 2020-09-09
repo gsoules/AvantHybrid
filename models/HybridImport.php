@@ -3,8 +3,14 @@
 class HybridImport
 {
     const OPTION_HYBRID_IMPORT_DELETING_ITEM = 'deleting-hybrid-item';
+    const OPTION_HYBRID_IMPORT_SAVING_ITEM = 'saving-hybrid-item';
 
     protected $actions;
+    protected $countAdded;
+    protected $countDeleted;
+    protected $countUnmappedSubject;
+    protected $countUnmappedType;
+    protected $countUpdated;
     protected $identifierElementId;
     protected $rebuildSiteTermsTable;
     protected $siteElementId;
@@ -18,10 +24,10 @@ class HybridImport
 
     function __construct()
     {
-        $this->useCommonVocabulary = intval(get_option(HybridConfig::OPTION_HYBRID_USE_CV)) != 0;
+        $this->useCommonVocabulary = plugin_is_active('AvantVocabulary') && intval(get_option(HybridConfig::OPTION_HYBRID_USE_CV)) != 0;
         $this->rebuildSiteTermsTable = false;
 
-        if ($this->useCommonVocabulary && plugin_is_active('AvantVocabulary'))
+        if ($this->useCommonVocabulary)
         {
             $this->vocabularyCommonTermsTable = get_db()->getTable('VocabularyCommonTerms');
             $this->vocabularySiteTermsTable = get_db()->getTable('VocabularySiteTerms');
@@ -31,6 +37,12 @@ class HybridImport
         $this->subjectElementId = ItemMetadata::getElementIdForElementName('Subject');
         $this->typeElementId = ItemMetadata::getElementIdForElementName('Type');
         $this->siteElementId = ItemMetadata::getElementIdForElementName(HybridConfig::getOptionTextForSiteElement());
+
+        $this->countAdded = 0;
+        $this->countDeleted = 0;
+        $this->countUnmappedSubject = 0;
+        $this->countUnmappedType = 0;
+        $this->countUpdated = 0;
 
         $this->logAction('');
     }
@@ -103,7 +115,8 @@ class HybridImport
         if (!$newHybridItemsRecord->save())
             throw new Exception($this->reportError(__FUNCTION__, ' save failed'));
 
-        $this->logAction("Added $hybridId as item $item->id");
+        $this->countAdded += 1;
+        $this->logAction("Added item $item->id for source record $hybridId");
         return $item;
     }
 
@@ -125,15 +138,6 @@ class HybridImport
         );
         $item = insert_item($metadata, $elementTexts);
         return $item;
-    }
-
-    public function deleteHybridItem($hybridId)
-    {
-        $hybridItemRecord = AvantHybrid::getHybridItemsRecord($hybridId);
-        $itemId = $hybridItemRecord['item_id'];
-        $this->deleteImagesFromHybridImagesTable($itemId);
-        $hybridItemRecord->delete();
-        return $itemId;
     }
 
     protected function deleteHybridItemElementTexts($itemId, $identifierElementId)
@@ -160,7 +164,7 @@ class HybridImport
             $hybridId = $id['hybrid_id'];
             if (!in_array($hybridId, $this->sourceRecords))
             {
-                $itemId = $this->deleteHybridItem($hybridId);
+                $itemId = $this->deleteHybridItemSourceRecords($hybridId);
                 $item = ItemMetadata::getItemFromId($itemId);
                 if ($item)
                 {
@@ -172,10 +176,20 @@ class HybridImport
                     $item->delete();
                     $_SESSION[self::OPTION_HYBRID_IMPORT_DELETING_ITEM] = false;
 
-                    $this->logAction('Deleted item ' . $itemId);
+                    $this->countDeleted += 1;
+                    $this->logAction("Deleted item $itemId for source record $hybridId");
                 }
             }
         }
+    }
+
+    public function deleteHybridItemSourceRecords($hybridId)
+    {
+        $hybridItemRecord = AvantHybrid::getHybridItemsRecord($hybridId);
+        $itemId = $hybridItemRecord['item_id'];
+        $this->deleteImagesFromHybridImagesTable($itemId);
+        $hybridItemRecord->delete();
+        return $itemId;
     }
 
     protected function deleteImagesFromHybridImagesTable($itemId)
@@ -216,7 +230,7 @@ class HybridImport
                 // Create an 'Other' Subject term.
                 $normalizedTerm = AvantVocabulary::normalizeSiteTerm($kind, $subject);
                 $term = "Other, $normalizedTerm";
-
+                $this->countUnmappedSubject += 1;
             }
 
             $this->lookupTermInSiteTermsTable($kind, $commonTermId, $term);
@@ -242,6 +256,7 @@ class HybridImport
         {
             // Create an 'Other' Type term.
             $term = "Other, $text";
+            $this->countUnmappedType += 1;
         }
 
         $this->lookupTermInSiteTermsTable($kind, $commonTermId, $term);
@@ -269,15 +284,16 @@ class HybridImport
                 // Delete the item's element texts;
                 $this->deleteHybridItemElementTexts($itemId, $this->identifierElementId);
 
-                $this->logAction("Updated $hybridId as item $itemId");
+                $this->countUpdated += 1;
+                $this->logAction("Updated item $itemId for source record $hybridId");
             }
             else
             {
                 // This source record is in the hybrid items table, but has no corresponding item.
                 // This should never happen, but if it does, clean up the ghost record and report it.
                 // Then fall through to let the hybrid item get created again.
-                $this->deleteHybridItem($hybridId);
-                $this->logAction("No Omeka item found to update for hybrid ID $hybridId.");
+                $this->deleteHybridItemSourceRecords($hybridId);
+                $this->logAction("No Omeka item found to update for source record $hybridId.");
             }
         }
 
@@ -307,7 +323,7 @@ class HybridImport
         }
 
         $public = $sourceRecord['properties']['<public>'] == '1';
-        $this->updateOmekaItemModifiedDate($item, $public);
+        $this->saveOmekaItem($item, $public);
 
         return true;
     }
@@ -327,6 +343,8 @@ class HybridImport
                 return $this->getResponse(false);
         }
 
+        $this->logStatistics();
+
         $this->rebuildSiteTermsTable();
 
         return $this->getResponse(true);
@@ -336,6 +354,18 @@ class HybridImport
     {
         $newline = current_user() ? '<br/>' : PHP_EOL;
         $this->actions .= $action . $newline;
+    }
+
+    protected function logStatistics()
+    {
+        $this->logAction('');
+        $this->logAction("Added $this->countAdded hybrid items");
+        $this->logAction("Updated $this->countUpdated hybrid items");
+        $this->logAction("Deleted $this->countDeleted hybrid items");
+        if ($this->countUnmappedType)
+            $this->logAction("$this->countUnmappedType Type terms not found in the Common Vocabulary");
+        if ($this->countUnmappedSubject)
+            $this->logAction("$this->countUnmappedSubject Subject terms not found in the Common Vocabulary");
     }
 
     protected function lookupTermInSiteTermsTable($kind, $commonTermId, $term)
@@ -393,6 +423,9 @@ class HybridImport
             $this->logAction("File not found: $filepath");
             return false;
         }
+
+        $count = count($csvRows) - 1;
+        $this->logAction("Read $count source records from $filepath");
 
         // Get the header row and the column for the timestamp.
         $header = $csvRows[0];
@@ -454,7 +487,7 @@ class HybridImport
         return "Exception in method $methodName(): $error";
     }
 
-    protected function updateOmekaItemModifiedDate($item, $public)
+    protected function saveOmekaItem($item, $public)
     {
         if ($item->public != $public)
             $item['public'] = $public;
@@ -464,7 +497,11 @@ class HybridImport
         $modified = $date->format('c');
         $item['modified'] = $modified;
 
-        if (!$item->save())
+        $_SESSION[self::OPTION_HYBRID_IMPORT_SAVING_ITEM] = true;
+        $saved = $item->save();
+        $_SESSION[self::OPTION_HYBRID_IMPORT_SAVING_ITEM] = false;
+
+        if (!$saved)
             throw new Exception($this->reportError(__FUNCTION__, ' save failed'));
     }
 }

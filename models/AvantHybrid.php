@@ -112,4 +112,9 @@ class AvantHybrid
 
         return $response;
     }
+
+    public static function savingHybridItem()
+    {
+        return isset($_SESSION[HybridImport::OPTION_HYBRID_IMPORT_SAVING_ITEM]) && $_SESSION[HybridImport::OPTION_HYBRID_IMPORT_SAVING_ITEM];
+    }
 }

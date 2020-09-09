@@ -24,7 +24,7 @@ class AvantHybridPlugin extends Omeka_Plugin_AbstractPlugin
 
     public function hookAfterDeleteItem($args)
     {
-        if (AvantHybrid::deletingHybridItem())
+        if (AvantCommon::importingHybridItem())
         {
             // This method is getting called because HybridImport is deleting an item. Do nothing here.
             return;
@@ -37,7 +37,7 @@ class AvantHybridPlugin extends Omeka_Plugin_AbstractPlugin
         if ($hybridItemRecord)
         {
             $hybridImport = new HybridImport();
-            $hybridImport->deleteHybridItem($hybridItemRecord['hybrid_id']);
+            $hybridImport->deleteHybridItemSourceRecords($hybridItemRecord['hybrid_id']);
         }
     }
 
