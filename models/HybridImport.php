@@ -347,11 +347,20 @@ class HybridImport
         $dateNow = $date->format('Y-m-d H:i:s');
         set_option(HybridConfig::OPTION_HYBRID_LAST_IMPORT, $dateNow);
 
-        $data = isset($_POST['data']) ? $_POST['data'] : '';
+        $data = isset($_POST['data']) ? $_POST['data'] : 'zzz';
+        $this->logAction("[START: $data]");
+        $data = json_decode($data, true);
+
+        $ppid = isset($data['PPID']) ? $data['PPID'] : 'nnn';
+        $title = isset($data['TITLE']) ? $data['TITLE'] : 'ttt';
+        $this->logAction("[PPID: $ppid]");
+        $this->logAction("[TITLE: $title]");
+
+        $this->logAction("END");
 
         $response['status'] = 'OK';
         $response['site-id'] = $siteId;
-        $response['results'] = $data;
+        $response['results'] = $this->actions;
 
         return $response;
 
