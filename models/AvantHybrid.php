@@ -95,6 +95,12 @@ class AvantHybrid
         {
             switch ($action)
             {
+                case 'hybrid-fetch':
+                    $hybridImport = new HybridImport();
+                    header('Content-Type: application/json');
+                    $response = json_encode($hybridImport->fetchSourceRecords($siteId));
+                    break;
+
                 case 'hybrid-import':
                     $hybridImport = new HybridImport();
                     $response = $hybridImport->importSourceRecords();

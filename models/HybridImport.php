@@ -200,6 +200,22 @@ class HybridImport
         }
     }
 
+    public function fetchSourceRecords($siteId)
+    {
+        $date = new DateTime();
+        $date->getTimestamp();
+        $dateNow = $date->format('Y-m-d H:i:s');
+
+        $sourceRecords = AvantHybrid::getAllHybridItemIds();
+        foreach ($sourceRecords as $sourceRecord)
+            $results[] = $sourceRecord['hybrid_id'];
+        $fetch['status'] = 'OK';
+        $fetch['site-id'] = $siteId;
+        $fetch['results'] = $results;
+        $fetch['last-import'] = get_option(HybridConfig::OPTION_HYBRID_LAST_IMPORT);
+        return $fetch;
+    }
+
     protected function getResponse($success)
     {
         $status = $success ? "OK" : "FAIL";
