@@ -93,30 +93,30 @@ class AvantHybrid
 
         if ($siteId == $id && $password == $pw)
         {
+            $hybridImport = new HybridImport();
+
             switch ($action)
             {
                 case 'hybrid-fetch':
-                    $hybridImport = new HybridImport();
-                    header('Content-Type: application/json');
-                    $response = json_encode($hybridImport->fetchSourceRecords($siteId));
+                    $response = $hybridImport->fetchSourceRecords($siteId);
                     break;
 
                 case 'hybrid-import':
-                    $hybridImport = new HybridImport();
-                    $response = $hybridImport->importSourceRecords();
+                    $response = $hybridImport->importSourceRecords($siteId);
                     break;
 
                 default:
-                    $response = 'Unsupported AvantHybrid action: ' . $action;
+                    $response['status'] = 'Unsupported AvantHybrid action: ' . $action;;
                     break;
             }
         }
         else
         {
-            $response = 'Hybrid request denied';
+            $response['status'] = 'Hybrid request denied';
         }
 
-        return $response;
+        header('Content-Type: application/json');
+        return json_encode($response);
     }
 
     public static function savingHybridItem()

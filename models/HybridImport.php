@@ -202,18 +202,16 @@ class HybridImport
 
     public function fetchSourceRecords($siteId)
     {
-        $date = new DateTime();
-        $date->getTimestamp();
-        $dateNow = $date->format('Y-m-d H:i:s');
-
         $sourceRecords = AvantHybrid::getAllHybridItemIds();
         foreach ($sourceRecords as $sourceRecord)
             $results[] = $sourceRecord['hybrid_id'];
-        $fetch['status'] = 'OK';
-        $fetch['site-id'] = $siteId;
-        $fetch['results'] = $results;
-        $fetch['last-import'] = get_option(HybridConfig::OPTION_HYBRID_LAST_IMPORT);
-        return $fetch;
+
+        $response['status'] = 'OK';
+        $response['site-id'] = $siteId;
+        $response['results'] = $results;
+        $response['last-import'] = get_option(HybridConfig::OPTION_HYBRID_LAST_IMPORT);
+
+        return $response;
     }
 
     protected function getResponse($success)
@@ -342,24 +340,37 @@ class HybridImport
         return true;
     }
 
-    public function importSourceRecords()
+    public function importSourceRecords($siteId)
     {
-        if (!$this->readSourceRecordsCsvFile())
-            return $this->getResponse(false);
+        $date = new DateTime();
+        $date->getTimestamp();
+        $dateNow = $date->format('Y-m-d H:i:s');
+        set_option(HybridConfig::OPTION_HYBRID_LAST_IMPORT, $dateNow);
 
-        // Delete any hybrid items in the Digital Archive that are no longer in the hybrid source database.
-        $this->deleteHybridItemsForDeletedSourceRecords();
+        $data = isset($_POST['data']) ? $_POST['data'] : '';
 
-        // Apply updates to all hybrid items that were added to or changed in the source database.
-        foreach ($this->updatedHybridItems as $hybrid)
-        {
-            if (!$this->importSourceRecord($hybrid))
-                return $this->getResponse(false);
-        }
+        $response['status'] = 'OK';
+        $response['site-id'] = $siteId;
+        $response['results'] = $data;
 
-        $this->logStatistics();
+        return $response;
 
-        return $this->getResponse(true);
+//        if (!$this->readSourceRecordsCsvFile())
+//            return $this->getResponse(false);
+//
+//        // Delete any hybrid items in the Digital Archive that are no longer in the hybrid source database.
+//        $this->deleteHybridItemsForDeletedSourceRecords();
+//
+//        // Apply updates to all hybrid items that were added to or changed in the source database.
+//        foreach ($this->updatedHybridItems as $hybrid)
+//        {
+//            if (!$this->importSourceRecord($hybrid))
+//                return $this->getResponse(false);
+//        }
+//
+//        $this->logStatistics();
+//
+//        return $this->getResponse(true);
     }
 
     protected function logAction($action)
