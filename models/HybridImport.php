@@ -214,12 +214,6 @@ class HybridImport
         return $response;
     }
 
-    protected function getResponse($success)
-    {
-        $status = $success ? "OK" : "FAIL";
-        return  $status . $this->actions;
-    }
-
     protected function getValueForSubjectElement($text)
     {
         $terms = array();
@@ -347,39 +341,43 @@ class HybridImport
         $dateNow = $date->format('Y-m-d H:i:s');
         set_option(HybridConfig::OPTION_HYBRID_LAST_IMPORT, $dateNow);
 
-        $data = isset($_POST['data']) ? $_POST['data'] : 'zzz';
-        $this->logAction("[START: $data]");
+        $data = isset($_POST['data']) ? $_POST['data'] : '';
+        if (empty($data))
+        {
+            $data = '{"PPID": "58DF9E02-0D98-429B-B9E8-666324969299", "UPDATED": "2020-09-03 12:01:06", "OBJECTID": "006.16.1", "OBJNAME": "Records", "TITLE": "Luders 2003", "IMAGE": "", "THUMB": "", "WEBINCLUDE": "1", "CAT": "archive/<hybrid-id>", "SUBJECTS": "", "DATE": "1805", "PLACE": "", "CREATOR": "Haskins, Sturgis", "PUBLISHER": null, "COLLECTION": "Sturgis Haskins Collection", "DESCRIP": "The binder contains photographs of Luders sailboats in the Mount Desert Island fleets of Southwest and Northeast Harbors, by name of boat.  It also contains newspaper articles, race results, members\' names and addresses, newsletters, emails, and the like."}';
+        }
+
         $data = json_decode($data, true);
 
-        $ppid = isset($data['PPID']) ? $data['PPID'] : 'nnn';
-        $title = isset($data['TITLE']) ? $data['TITLE'] : 'ttt';
-        $this->logAction("[PPID: $ppid]");
-        $this->logAction("[TITLE: $title]");
+        // Create an array that maps hybrid column names to element Ids and pseudo element names.
+        $map = array();
+        $mappings = HybridConfig::getOptionDataForColumnMappingField();
+        foreach ($mappings as $elementId => $mapping)
+        {
+            $map[$mapping['column']] = $elementId;
+        }
 
-        $this->logAction("END");
+        $pseudoElements = HybridConfig::getPseudoElements();
+
+        foreach ($map as $column => $elementName)
+        {
+            $value = $data[$column];
+            if (in_array($elementName, $pseudoElements))
+                $properties[$elementName] = $value;
+            else
+                $elements[$elementName] = $value;
+        }
+
+        $this->updatedHybridItems[$properties['<hybrid-id>']] = array('properties' => $properties, 'elements' => $elements);
+
+        $this->logAction("Processed: " . $data['PPID']);
+        $this->logStatistics();
 
         $response['status'] = 'OK';
         $response['site-id'] = $siteId;
         $response['results'] = $this->actions;
 
         return $response;
-
-//        if (!$this->readSourceRecordsCsvFile())
-//            return $this->getResponse(false);
-//
-//        // Delete any hybrid items in the Digital Archive that are no longer in the hybrid source database.
-//        $this->deleteHybridItemsForDeletedSourceRecords();
-//
-//        // Apply updates to all hybrid items that were added to or changed in the source database.
-//        foreach ($this->updatedHybridItems as $hybrid)
-//        {
-//            if (!$this->importSourceRecord($hybrid))
-//                return $this->getResponse(false);
-//        }
-//
-//        $this->logStatistics();
-//
-//        return $this->getResponse(true);
     }
 
     protected function logAction($action)

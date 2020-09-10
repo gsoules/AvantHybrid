@@ -90,6 +90,7 @@ class AvantHybrid
     {
         $id = HybridConfig::getOptionTextForImportId();
         $pw = HybridConfig::getOptionTextForImportPassword();
+        $debugging = false;
 
         if ($siteId == $id && $password == $pw)
         {
@@ -102,6 +103,7 @@ class AvantHybrid
                     break;
 
                 case 'hybrid-import':
+                    $debugging = isset($_GET['debug']);
                     $response = $hybridImport->importSourceRecords($siteId);
                     break;
 
@@ -115,8 +117,15 @@ class AvantHybrid
             $response['status'] = 'Hybrid request denied';
         }
 
-        header('Content-Type: application/json');
-        return json_encode($response);
+        if ($debugging)
+        {
+            return $response['results'];
+        }
+        else
+        {
+            header('Content-Type: application/json');
+            return json_encode($response);
+        }
     }
 
     public static function savingHybridItem()
