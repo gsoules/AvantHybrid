@@ -98,13 +98,15 @@ class AvantHybrid
 
             switch ($action)
             {
-                case 'hybrid-fetch':
+                case HybridImport::ACTION_FETCH:
                     $response = $hybridImport->fetchSourceRecords($siteId);
                     break;
 
-                case 'hybrid-import':
+                case HybridImport::ACTION_ADD:
+                case HybridImport::ACTION_UPDATE:
+                case HybridImport::ACTION_DELETE:
                     $debugging = isset($_GET['debug']);
-                    $response = $hybridImport->importSourceRecords($siteId);
+                    $response = $hybridImport->performImportAction($siteId, $action);
                     break;
 
                 default:

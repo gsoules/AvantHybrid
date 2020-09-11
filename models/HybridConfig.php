@@ -16,7 +16,6 @@ class HybridConfig extends ConfigOptions
     const OPTION_HYBRID_IMAGE_URL = 'avanthybrid_image_url';
     const OPTION_HYBRID_IMPORT_ID = 'avanthybrid_import_id';
     const OPTION_HYBRID_IMPORT_PW = 'avanthybrid_import_pw';
-    const OPTION_HYBRID_LAST_IMPORT = 'avanthybrid_last_import';
     const OPTION_HYBRID_SITE_ELEMENT = 'avanthybrid_site_element';
     const OPTION_HYBRID_SITE_URL = 'avanthybrid_site_url';
     const OPTION_HYBRID_USE_CV = 'avanthybrid_use_cv';
@@ -128,7 +127,6 @@ class HybridConfig extends ConfigOptions
     {
         return array(
             '<hybrid-id>',
-            '<timestamp>',
             '<image>',
             '<thumb>',
             '<site>',

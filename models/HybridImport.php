@@ -5,12 +5,12 @@ class HybridImport
     const OPTION_HYBRID_IMPORT_DELETING_ITEM = 'deleting-hybrid-item';
     const OPTION_HYBRID_IMPORT_SAVING_ITEM = 'saving-hybrid-item';
 
+    const ACTION_ADD = 'hybrid-add';
+    const ACTION_DELETE = 'hybrid-delete';
+    const ACTION_FETCH = 'hybrid-fetch';
+    const ACTION_UPDATE = 'hybrid-update';
+
     protected $actions;
-    protected $countAdded;
-    protected $countDeleted;
-    protected $countUnmappedSubject;
-    protected $countUnmappedType;
-    protected $countUpdated;
     protected $identifierElementId;
     protected $siteElementId;
     protected $sourceRecords = array();
@@ -35,14 +35,6 @@ class HybridImport
         $this->subjectElementId = ItemMetadata::getElementIdForElementName('Subject');
         $this->typeElementId = ItemMetadata::getElementIdForElementName('Type');
         $this->siteElementId = ItemMetadata::getElementIdForElementName(HybridConfig::getOptionTextForSiteElement());
-
-        $this->countAdded = 0;
-        $this->countDeleted = 0;
-        $this->countUnmappedSubject = 0;
-        $this->countUnmappedType = 0;
-        $this->countUpdated = 0;
-
-    //    $this->logAction('');
     }
 
     protected function addElementTextsToHybridItem($hybrid, $item)
@@ -113,7 +105,6 @@ class HybridImport
         if (!$newHybridItemsRecord->save())
             throw new Exception($this->reportError(__FUNCTION__, ' save failed'));
 
-        $this->countAdded += 1;
         $this->logAction("Added item $item->id for source record $hybridId");
         return $item;
     }
@@ -138,6 +129,30 @@ class HybridImport
         return $item;
     }
 
+    protected function deleteHybridItem($hybridId)
+    {
+        $itemId = $this->deleteHybridItemSourceRecords($hybridId);
+        $item = ItemMetadata::getItemFromId($itemId);
+        if ($item)
+        {
+            if (plugin_is_active('AvantElasticsearch'))
+            {
+                AvantElasticsearch::deleteItemFromIndexes($item);
+            }
+
+            // Delete the item, its files, and all of its element texts.
+            $_SESSION[self::OPTION_HYBRID_IMPORT_DELETING_ITEM] = true;
+            $item->delete();
+            $_SESSION[self::OPTION_HYBRID_IMPORT_DELETING_ITEM] = false;
+
+            $this->logAction("Deleted item $itemId for source record $hybridId");
+        }
+        else
+        {
+            $this->logAction("No item exists for source record $hybridId");
+        }
+    }
+
     protected function deleteHybridItemElementTexts($itemId, $identifierElementId)
     {
         // Delete element texts except Identifier element
@@ -152,42 +167,18 @@ class HybridImport
         }
     }
 
-    protected function deleteHybridItemsForDeletedSourceRecords()
-    {
-        // Delete items from the Hybrid Items table that are no longer in the source records.
-        $hybridIds = AvantHybrid::getAllHybridItemIds();
-
-        foreach ($hybridIds as $id)
-        {
-            $hybridId = $id['hybrid_id'];
-            if (!in_array($hybridId, $this->sourceRecords))
-            {
-                $itemId = $this->deleteHybridItemSourceRecords($hybridId);
-                $item = ItemMetadata::getItemFromId($itemId);
-                if ($item)
-                {
-                    if (plugin_is_active('AvantElasticsearch'))
-                        AvantElasticsearch::deleteItemFromIndexes($item);
-
-                    // Delete the item, its files, and all of its element texts.
-                    $_SESSION[self::OPTION_HYBRID_IMPORT_DELETING_ITEM] = true;
-                    $item->delete();
-                    $_SESSION[self::OPTION_HYBRID_IMPORT_DELETING_ITEM] = false;
-
-                    $this->countDeleted += 1;
-                    $this->logAction("Deleted item $itemId for source record $hybridId");
-                }
-            }
-        }
-    }
-
     public function deleteHybridItemSourceRecords($hybridId)
     {
         $hybridItemRecord = AvantHybrid::getHybridItemsRecord($hybridId);
-        $itemId = $hybridItemRecord['item_id'];
-        $this->deleteImagesFromHybridImagesTable($itemId);
-        $hybridItemRecord->delete();
-        return $itemId;
+        if ($hybridItemRecord)
+        {
+            $itemId = $hybridItemRecord['item_id'];
+            $this->deleteImagesFromHybridImagesTable($itemId);
+            $hybridItemRecord->delete();
+            return $itemId;
+        }
+
+        return 0;
     }
 
     protected function deleteImagesFromHybridImagesTable($itemId)
@@ -209,9 +200,26 @@ class HybridImport
         $response['status'] = 'OK';
         $response['site-id'] = $siteId;
         $response['results'] = $results;
-        $response['last-import'] = get_option(HybridConfig::OPTION_HYBRID_LAST_IMPORT);
 
         return $response;
+    }
+
+    protected function getSourceRecordData()
+    {
+        $data = isset($_POST['data']) ? $_POST['data'] : '';
+        if (empty($data))
+        {
+            // No data means we are debugging using hard-coded data copy/pasted from the Python exporter in dry run mode.
+            $data = "{'PPID': 'B04AC87A-726E-475E-A61F-923941704156', 'OBJECTID': '2006.1.3', 'OBJNAME': 'Instruction Book', 'TITLE': 'Graded Literature Readers, Second Book', 'IMAGE': '013/200613.jpg', 'THUMB': '013/thumbs/200613.jpg', 'WEBINCLUDE': '1', 'CAT': 'library/<hybrid-id>', 'SUBJECTS': 'literature;reading;elementary school teaching', 'DATE': '1899', 'PLACE': '', 'CREATOR': 'Judson, Harry Pratt and Ida C. Bender, eds.', 'PUBLISHER': 'Maynard, Merrill, & Co.', 'COLLECTION': 'Books in Archival Storage', 'DESCRIP': '\"In the Graded Literature Readers good literature has been presented as early as possible, and the classic tales and fables, to which constant allusion is made in literature and daily life, are largely used.\"\r\n'}";
+
+            // Convert the string to use double-quotes instead of single, and remove carriage returns, so that json_decode will work;
+            $data = str_replace("\r\n", "", $data);
+            $data = str_replace('"', '$', $data);
+            $data = str_replace("'", "\"", $data);
+            $data = str_replace('$', '\\"', $data);
+        }
+        $data = json_decode($data, true);
+        return $data;
     }
 
     protected function getValueForSubjectElement($text)
@@ -236,7 +244,6 @@ class HybridImport
                 // Create an 'Other' Subject term.
                 $normalizedTerm = AvantVocabulary::normalizeSiteTerm($kind, $subject);
                 $term = "Other, $normalizedTerm";
-                $this->countUnmappedSubject += 1;
             }
 
             $this->lookupTermInSiteTermsTable($kind, $commonTermId, $term);
@@ -262,7 +269,6 @@ class HybridImport
         {
             // Create an 'Other' Type term.
             $term = "Other, $text";
-            $this->countUnmappedType += 1;
         }
 
         $this->lookupTermInSiteTermsTable($kind, $commonTermId, $term);
@@ -271,42 +277,72 @@ class HybridImport
         return $terms;
     }
 
-    protected function importSourceRecord($sourceRecord)
+    protected function importSourceRecord($sourceRecord, $action)
     {
         $hybridId = $sourceRecord['properties']['<hybrid-id>'];
         $hybridItemRecord = AvantHybrid::getHybridItemsRecord($hybridId);
-
         $item = null;
-        if ($hybridItemRecord)
+
+        if ($action == self::ACTION_ADD)
         {
-            $itemId = $hybridItemRecord['item_id'];
-            $item = AvantCommon::fetchItemForRemoteRequest($itemId);
-
-            if ($item)
+            if ($hybridItemRecord)
             {
-                // Delete the hybrid's images.
-                $this->deleteImagesFromHybridImagesTable($itemId);
-
-                // Delete the item's element texts;
-                $this->deleteHybridItemElementTexts($itemId, $this->identifierElementId);
-
-                $this->countUpdated += 1;
-                $this->logAction("Updated item $itemId for source record $hybridId");
+                // The request is to add an item that already exists. This should never happen, but if it does
+                // due to a bug, or during development, convert that Add request to an Update request.
+                $action = self::ACTION_UPDATE;
             }
             else
             {
-                // This source record is in the hybrid items table, but has no corresponding item.
-                // This should never happen, but if it does, clean up the ghost record and report it.
-                // Then fall through to let the hybrid item get created again.
-                $this->deleteHybridItemSourceRecords($hybridId);
-                $this->logAction("No Omeka item found to update for source record $hybridId.");
+                // Create a new hybrid item and add it to the hybrids table.
+                $item = $this->createNewHybridItemsRecord($sourceRecord, $hybridId);
+                if (!$item)
+                {
+                    $this->logAction("Failed to add hybrid item for source record $hybridId");
+                    return;
+                }
             }
         }
 
-        if (!$item)
+        if ($action == self::ACTION_UPDATE)
         {
-            // Create a new hybrid item and add it to the hybrids table.
-            $item = $this->createNewHybridItemsRecord($sourceRecord, $hybridId);
+            if ($hybridItemRecord)
+            {
+                $itemId = $hybridItemRecord['item_id'];
+                $item = AvantCommon::fetchItemForRemoteRequest($itemId);
+
+                if ($item)
+                {
+                    // Delete the hybrid's images.
+                    $this->deleteImagesFromHybridImagesTable($itemId);
+
+                    // Delete the item's element texts;
+                    $this->deleteHybridItemElementTexts($itemId, $this->identifierElementId);
+
+                    // Update the hybrid record's imported date.
+                    $date = new DateTime();
+                    $date->setTimezone(new DateTimeZone("America/New_York"));
+                    $dateNow = $date->format('Y-m-d H:i:s');
+                    $hybridItemRecord['imported'] = $dateNow;
+                    if (!$hybridItemRecord->save())
+                        throw new Exception($this->reportError(__FUNCTION__, ' save failed'));
+
+                    $this->logAction("Updated item $itemId for source record $hybridId");
+                }
+                else
+                {
+                    // This source record is in the hybrid items table, but has no corresponding item.
+                    // This should never happen, but if it does, clean up the ghost record and report it.
+                    // Then fall through to let the hybrid item get created again.
+                    $this->deleteHybridItemSourceRecords($hybridId);
+                    $this->logAction("No Omeka item found to update for source record $hybridId.");
+                }
+            }
+            else
+            {
+                // The request is to update a hybrid item that does not exist in the hybrid items table.
+                $this->logAction("No hybrid item exits to be updated for source record $hybridId");
+                return;
+            }
         }
 
         // Add image and thumb urls to the Hybrid Images table.
@@ -330,55 +366,6 @@ class HybridImport
 
         $public = $sourceRecord['properties']['<public>'] == '1';
         $this->saveOmekaItem($item, $public);
-
-        return true;
-    }
-
-    public function importSourceRecords($siteId)
-    {
-        $date = new DateTime();
-        $date->setTimezone(new DateTimeZone("America/New_York"));
-        $dateNow = $date->format('Y-m-d H:i:s');
-        set_option(HybridConfig::OPTION_HYBRID_LAST_IMPORT, $dateNow);
-
-        $data = isset($_POST['data']) ? $_POST['data'] : '';
-        if (empty($data))
-        {
-            $data = '{"PPID": "58DF9E02-0D98-429B-B9E8-666324969299", "UPDATED": "2020-09-03 12:01:06", "OBJECTID": "006.16.1", "OBJNAME": "Records", "TITLE": "Luders 2003", "IMAGE": "", "THUMB": "", "WEBINCLUDE": "1", "CAT": "archive/<hybrid-id>", "SUBJECTS": "", "DATE": "1805", "PLACE": "", "CREATOR": "Haskins, Sturgis", "PUBLISHER": null, "COLLECTION": "Sturgis Haskins Collection", "DESCRIP": "The binder contains photographs of Luders sailboats in the Mount Desert Island fleets of Southwest and Northeast Harbors, by name of boat.  It also contains newspaper articles, race results, members\' names and addresses, newsletters, emails, and the like."}';
-        }
-
-        $data = json_decode($data, true);
-
-        // Create an array that maps hybrid column names to element Ids and pseudo element names.
-        $map = array();
-        $mappings = HybridConfig::getOptionDataForColumnMappingField();
-        foreach ($mappings as $elementId => $mapping)
-        {
-            $map[$mapping['column']] = $elementId;
-        }
-
-        $pseudoElements = HybridConfig::getPseudoElements();
-
-        foreach ($map as $column => $elementName)
-        {
-            $value = $data[$column];
-            if (in_array($elementName, $pseudoElements))
-                $properties[$elementName] = $value;
-            else
-                $elements[$elementName] = $value;
-        }
-
-        $sourceRecord = array('properties' => $properties, 'elements' => $elements);
-        $this->importSourceRecord($sourceRecord);
-
-//        $this->logAction("Processed: " . $data['PPID']);
-//        $this->logStatistics();
-
-        $response['status'] = 'OK';
-        $response['site-id'] = $siteId;
-        $response['results'] = $this->actions;
-
-        return $response;
     }
 
     protected function logAction($action)
@@ -387,18 +374,6 @@ class HybridImport
         if ($this->actions)
             $this->actions .= $newline;
         $this->actions .= $action;
-    }
-
-    protected function logStatistics()
-    {
-        $this->logAction('');
-        $this->logAction("Added $this->countAdded hybrid items");
-        $this->logAction("Updated $this->countUpdated hybrid items");
-        $this->logAction("Deleted $this->countDeleted hybrid items");
-        if ($this->countUnmappedType)
-            $this->logAction("$this->countUnmappedType Type terms not found in the Common Vocabulary");
-        if ($this->countUnmappedSubject)
-            $this->logAction("$this->countUnmappedSubject Subject terms not found in the Common Vocabulary");
     }
 
     protected function lookupTermInSiteTermsTable($kind, $commonTermId, $term)
@@ -427,14 +402,9 @@ class HybridImport
         }
     }
 
-    protected function readSourceRecordsCsvFile()
+    public function performImportAction($siteId, $action)
     {
-        // Get the path to the file containing the hybrid data.
-        if (AvantCommon::userIsSuper())
-            $fileName = isset($_GET['filename']) ? $_GET['filename'] : '';
-        else
-            $fileName = isset($_POST['filename']) ? $_POST['filename'] : '';
-        $filepath = FILES_DIR . '/hybrid/' . $fileName;
+        $data = $this->getSourceRecordData();
 
         // Create an array that maps hybrid column names to element Ids and pseudo element names.
         $map = array();
@@ -444,64 +414,34 @@ class HybridImport
             $map[$mapping['column']] = $elementId;
         }
 
-        // Read all the rows in the CSV file
-        $csvRows = array();
-        if (($handle = @fopen($filepath, "r")) !== FALSE)
+        if ($action == self::ACTION_DELETE)
         {
-            while (($data = fgetcsv($handle)) !== FALSE)
-            {
-                $csvRows[] = $data;
-            }
-            fclose($handle);
+            $hybridIdColumnName = array_search('<hybrid-id>', $map);
+            $hybridId = $data[$hybridIdColumnName];
+            $this->deleteHybridItem($hybridId);
         }
         else
         {
-            $this->logAction("File not found: $filepath");
-            return false;
-        }
+            $pseudoElements = HybridConfig::getPseudoElements();
 
-        $count = count($csvRows) - 1;
-        $this->logAction("Read $count source records from $filepath");
-
-        // Get the header row and the column for the timestamp.
-        $header = $this->validateHeaderRow($csvRows[0]);
-        if (!$header)
-            return false;
-
-        $hybridIdColumn = array_search(array_search('<hybrid-id>', $map), $header);
-        $timestampColumn = array_search(array_search('<timestamp>', $map), $header);
-
-        // Create a hybrid object for each row that has been updated.
-        $pseudoElements = HybridConfig::getPseudoElements();
-        foreach ($csvRows as $index => $csvRow)
-        {
-            if ($index == 0)
-                // Skip the header row.
-                continue;
-
-            $this->sourceRecords[] = $csvRow[$hybridIdColumn];
-
-            if (!isset($csvRow[$timestampColumn]))
-                // Skip rows that have not been updated.
-                continue;
-
-            if (empty($csvRow[$timestampColumn]))
-                // Skip this row since it was not updated.
-                continue;
-
-            foreach ($csvRow as $column => $value)
+            foreach ($map as $column => $elementName)
             {
-                $name = $map[$header[$column]];
-                if (in_array($name, $pseudoElements))
-                    $properties[$name] = $value;
+                $value = $data[$column];
+                if (in_array($elementName, $pseudoElements))
+                    $properties[$elementName] = $value;
                 else
-                    $elements[$name] = $value;
+                    $elements[$elementName] = $value;
             }
 
-            $this->updatedHybridItems[$properties['<hybrid-id>']] = array('properties' => $properties, 'elements' => $elements);
+            $sourceRecord = array('properties' => $properties, 'elements' => $elements);
+            $this->importSourceRecord($sourceRecord, $action);
         }
 
-        return true;
+        $response['status'] = 'OK';
+        $response['site-id'] = $siteId;
+        $response['results'] = $this->actions;
+
+        return $response;
     }
 
     protected function reportError($methodName, $error)
