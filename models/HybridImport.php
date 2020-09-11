@@ -42,7 +42,7 @@ class HybridImport
         $this->countUnmappedType = 0;
         $this->countUpdated = 0;
 
-        $this->logAction('');
+    //    $this->logAction('');
     }
 
     protected function addElementTextsToHybridItem($hybrid, $item)
@@ -337,7 +337,7 @@ class HybridImport
     public function importSourceRecords($siteId)
     {
         $date = new DateTime();
-        $date->getTimestamp();
+        $date->setTimezone(new DateTimeZone("America/New_York"));
         $dateNow = $date->format('Y-m-d H:i:s');
         set_option(HybridConfig::OPTION_HYBRID_LAST_IMPORT, $dateNow);
 
@@ -368,10 +368,11 @@ class HybridImport
                 $elements[$elementName] = $value;
         }
 
-        $this->updatedHybridItems[$properties['<hybrid-id>']] = array('properties' => $properties, 'elements' => $elements);
+        $sourceRecord = array('properties' => $properties, 'elements' => $elements);
+        $this->importSourceRecord($sourceRecord);
 
-        $this->logAction("Processed: " . $data['PPID']);
-        $this->logStatistics();
+//        $this->logAction("Processed: " . $data['PPID']);
+//        $this->logStatistics();
 
         $response['status'] = 'OK';
         $response['site-id'] = $siteId;
@@ -383,7 +384,9 @@ class HybridImport
     protected function logAction($action)
     {
         $newline = current_user() ? '<br/>' : PHP_EOL;
-        $this->actions .= $action . $newline;
+        if ($this->actions)
+            $this->actions .= $newline;
+        $this->actions .= $action;
     }
 
     protected function logStatistics()
@@ -512,7 +515,7 @@ class HybridImport
             $item['public'] = $public;
 
         $date = new DateTime();
-        $date->setTimezone(new DateTimeZone('UTC'));
+        $date->setTimezone(new DateTimeZone("America/New_York"));
         $modified = $date->format('c');
         $item['modified'] = $modified;
 
