@@ -204,7 +204,7 @@ class HybridImport
     {
         $sourceRecords = AvantHybrid::getAllHybridItemIds();
         foreach ($sourceRecords as $sourceRecord)
-            $results[] = $sourceRecord['hybrid_id'];
+            $results[$sourceRecord['hybrid_id']] = $sourceRecord['imported'];
 
         $response['status'] = 'OK';
         $response['site-id'] = $siteId;

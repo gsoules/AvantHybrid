@@ -28,6 +28,7 @@ class HybridTableFactory
             `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
             `item_id` int(10) unsigned NOT NULL,
             `hybrid_id` varchar(512) DEFAULT NULL,
+            `imported` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`)
         ) ENGINE=InnoDB  DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci";
 

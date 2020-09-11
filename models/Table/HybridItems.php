@@ -6,7 +6,7 @@ class Table_HybridItems extends Omeka_Db_Table
     {
         $select = $this->getSelect();
         $select->reset(Zend_Db_Select::COLUMNS);
-        $select->columns(array('hybrid_id'));
+        $select->columns(array('hybrid_id', 'imported'));
         $results = get_db()->query($select)->fetchAll();
         return $results;
     }
