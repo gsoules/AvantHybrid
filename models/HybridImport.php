@@ -287,8 +287,8 @@ class HybridImport
         {
             if ($hybridItemRecord)
             {
-                // The request is to add an item that already exists. This should never happen, but if it does
-                // due to a bug, or during development, convert that Add request to an Update request.
+                // This is a bad request is to add an item that already exists. This should
+                // never happen, but if it does convert the Add request to an Update request.
                 $action = self::ACTION_UPDATE;
             }
             else
@@ -331,16 +331,16 @@ class HybridImport
                 else
                 {
                     // This source record is in the hybrid items table, but has no corresponding item.
-                    // This should never happen, but if it does, clean up the ghost record and report it.
-                    // Then fall through to let the hybrid item get created again.
+                    // This should never happen, but if it does, clean up the ghost record.
                     $this->deleteHybridItemSourceRecords($hybridId);
                     $this->logAction("No Omeka item found to update for source record $hybridId.");
+                    return;
                 }
             }
             else
             {
-                // The request is to update a hybrid item that does not exist in the hybrid items table.
-                $this->logAction("No hybrid item exits to be updated for source record $hybridId");
+                // This is a bad request to update a hybrid item that does not exist in the hybrid items table.
+                $this->logAction("No hybrid item exists to be updated for source record $hybridId");
                 return;
             }
         }
@@ -364,6 +364,7 @@ class HybridImport
             $avantElasticsearch->updateIndexForItem($item, $avantElasticsearchIndexBuilder, $sharedIndexIsEnabled, $localIndexIsEnabled);
         }
 
+        // Save the item, updating it's public status if necessary.
         $public = $sourceRecord['properties']['<public>'] == '1';
         $this->saveOmekaItem($item, $public);
     }
