@@ -103,19 +103,19 @@ class AvantHybrid
 
         if ($siteId == $id && $password == $pw)
         {
-            $hybridImport = new HybridImport($options);
+            $hybridImport = new HybridImport($siteId, $options);
 
             switch ($action)
             {
                 case HybridImport::ACTION_FETCH:
-                    $response = $hybridImport->fetchSourceRecords($siteId);
+                    $response = $hybridImport->fetchSourceRecords();
                     break;
 
                 case HybridImport::ACTION_ADD:
                 case HybridImport::ACTION_UPDATE:
                 case HybridImport::ACTION_DELETE:
                     $debugging = isset($_GET['debug']);
-                    $response = $hybridImport->performImportAction($siteId, $action);
+                    $response = $hybridImport->performImportAction($action);
                     break;
 
                 default:

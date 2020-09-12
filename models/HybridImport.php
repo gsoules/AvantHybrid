@@ -14,6 +14,7 @@ class HybridImport
     protected $bulkImport;
     protected $identifierElementId;
     protected $siteElementId;
+    protected $siteId;
     protected $subjectElementId;
     protected $tracing;
     protected $typeElementId;
@@ -21,8 +22,9 @@ class HybridImport
     protected $vocabularyCommonTermsTable = null;
     protected $vocabularySiteTermsTable = null;
 
-    function __construct($options)
+    function __construct($siteId, $options)
     {
+        $this->siteId = $siteId;
         $parts = explode(',', $options);
 
         // The bulk import option means that this import request is one of a many that are intended
@@ -221,14 +223,14 @@ class HybridImport
         }
     }
 
-    public function fetchSourceRecords($siteId)
+    public function fetchSourceRecords()
     {
         $sourceRecords = AvantHybrid::getAllHybridItemIds();
         foreach ($sourceRecords as $sourceRecord)
             $results[$sourceRecord['hybrid_id']] = $sourceRecord['imported'];
 
         $response['status'] = 'OK';
-        $response['site-id'] = $siteId;
+        $response['site-id'] = $this->siteId;
         $response['results'] = $results;
 
         return $response;
@@ -240,7 +242,6 @@ class HybridImport
         if (empty($data))
         {
             // No data means we are debugging using hard-coded data copy/pasted from the Python exporter in dry run mode.
-//            $data = "{'PPID': 'B04AC87A-726E-475E-A61F-923941704156', 'OBJECTID': '2006.1.3', 'OBJNAME': 'Instruction Book', 'TITLE': 'Graded Literature Readers, Second Book', 'IMAGE': '013/200613.jpg', 'THUMB': '013/thumbs/200613.jpg', 'WEBINCLUDE': '1', 'CAT': 'library/<hybrid-id>', 'SUBJECTS': 'literature;reading;elementary school teaching', 'DATE': '1899', 'PLACE': '', 'CREATOR': 'Judson, Harry Pratt and Ida C. Bender, eds.', 'PUBLISHER': 'Maynard, Merrill, & Co.', 'COLLECTION': 'Books in Archival Storage', 'DESCRIP': '\"In the Graded Literature Readers good literature has been presented as early as possible, and the classic tales and fables, to which constant allusion is made in literature and daily life, are largely used.\"\r\n'}";
             $data = "{'PPID': 'C0910F7B-BEA4-42E6-9CD5-051821184355', 'OBJECTID': '018.011.16', 'OBJNAME': 'Book', 'TITLE': 'Poems For Sutton Island', 'IMAGE': '', 'THUMB': '', 'WEBINCLUDE': '0', 'CAT': 'library/<hybrid-id>', 'SUBJECTS': '', 'DATE': '1969', 'PLACE': '', 'CREATOR': 'Hortense Flexner', 'PUBLISHER': '', 'COLLECTION': '', 'DESCRIP': ''}";
 
             // Convert the string to use double-quotes instead of single, and remove carriage returns, so that json_decode will work;
@@ -446,11 +447,11 @@ class HybridImport
         if ($addSiteTerm)
         {
             AvantVocabulary::addNewUnmappedSiteTerm($kind, $term);
-            $this->logAction("Added unmapped site term '$term' (kind = $kind)");
+            $this->trace("Added unmapped site term '$term' (kind = $kind)");
         }
     }
 
-    public function performImportAction($siteId, $action)
+    public function performImportAction($action)
     {
         $data = $this->getSourceRecordData();
 
@@ -486,7 +487,7 @@ class HybridImport
         }
 
         $response['status'] = 'OK';
-        $response['site-id'] = $siteId;
+        $response['site-id'] = $this->siteId;
         $response['results'] = $this->actions;
 
         return $response;
@@ -495,7 +496,7 @@ class HybridImport
     protected function reportAction($action, $item, $hybridId)
     {
         $actionName = $action == self::ACTION_ADD ? 'Added' : 'Updated';
-        $this->logAction("$actionName item $item->id for source record $hybridId", $this->tracing);
+        $this->logAction("$actionName item $item->id for record $hybridId", $this->tracing);
 
         if ($this->tracing)
         {
