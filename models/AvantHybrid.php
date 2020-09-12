@@ -71,6 +71,14 @@ class AvantHybrid
         return get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL) . self::getFileNameForImage($hybridImageRecord);
     }
 
+    public static function getOptions()
+    {
+        $options = isset($_POST['options']) ? $_POST['options'] : '';
+        if (empty($options))
+            $options = isset($_GET['options']) ? $_GET['options'] : '';
+        return $options;
+    }
+
     public static function getSiteUrl()
     {
         return get_option(HybridConfig::OPTION_HYBRID_SITE_URL);
@@ -88,13 +96,14 @@ class AvantHybrid
 
     public static function handleRemoteRequest($action, $siteId, $password)
     {
+        $options = self::getOptions();
         $id = HybridConfig::getOptionTextForImportId();
         $pw = HybridConfig::getOptionTextForImportPassword();
         $debugging = false;
 
         if ($siteId == $id && $password == $pw)
         {
-            $hybridImport = new HybridImport();
+            $hybridImport = new HybridImport($options);
 
             switch ($action)
             {

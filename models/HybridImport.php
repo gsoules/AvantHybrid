@@ -11,19 +11,29 @@ class HybridImport
     const ACTION_UPDATE = 'hybrid-update';
 
     protected $actions;
+    protected $bulkImport;
     protected $identifierElementId;
     protected $siteElementId;
-    protected $sourceRecords = array();
     protected $subjectElementId;
+    protected $tracing;
     protected $typeElementId;
-    protected $updatedHybridItems = array();
     protected $useCommonVocabulary;
     protected $vocabularyCommonTermsTable = null;
     protected $vocabularySiteTermsTable = null;
 
-    function __construct()
+    function __construct($options)
     {
-        $this->useCommonVocabulary = plugin_is_active('AvantVocabulary') && intval(get_option(HybridConfig::OPTION_HYBRID_USE_CV)) != 0;
+        $parts = explode(',', $options);
+        $this->bulkImport = in_array('bulk', $parts);
+        $this->tracing = in_array('trace', $parts);
+
+        $this->logAction("Bulk:$this->bulkImport, Trace:$this->tracing");
+
+        $this->useCommonVocabulary =
+            !$this->bulkImport &&
+            plugin_is_active('AvantVocabulary') &&
+            plugin_is_active('AvantElasticsearch') &&
+            intval(get_option(HybridConfig::OPTION_HYBRID_USE_CV)) != 0;
 
         if ($this->useCommonVocabulary)
         {
@@ -39,6 +49,8 @@ class HybridImport
 
     protected function addElementTextsToHybridItem($hybrid, $item)
     {
+        $this->trace(__FUNCTION__);
+
         foreach ($hybrid['elements'] as $elementId => $text)
         {
             if (empty($text))
@@ -62,6 +74,8 @@ class HybridImport
 
     protected function addImagesToHybridImagesTable($hybrid, $itemId)
     {
+        $this->trace(__FUNCTION__);
+
         $images = explode(';', $hybrid['properties']['<image>']);
         $thumbs = explode(';', $hybrid['properties']['<thumb>']);
 
@@ -84,6 +98,8 @@ class HybridImport
         if (empty($siteElementId))
             return;
 
+        $this->trace(__FUNCTION__);
+
         $element = $item->getElementById($siteElementId);
         $siteUrl = AvantHybrid::getSiteUrl();
 
@@ -97,6 +113,8 @@ class HybridImport
 
     protected function createNewHybridItemsRecord($hybrid, $hybridId)
     {
+        $this->trace(__FUNCTION__);
+
         $item = $this->createNewOmekaItem($hybrid);
 
         $newHybridItemsRecord = new HybridItems();
@@ -104,8 +122,6 @@ class HybridImport
         $newHybridItemsRecord['item_id'] = $item->id;
         if (!$newHybridItemsRecord->save())
             throw new Exception($this->reportError(__FUNCTION__, ' save failed'));
-
-        $this->logAction("Added item $item->id for source record $hybridId");
         return $item;
     }
 
@@ -169,6 +185,8 @@ class HybridImport
 
     public function deleteHybridItemSourceRecords($hybridId)
     {
+        $this->trace(__FUNCTION__);
+
         $hybridItemRecord = AvantHybrid::getHybridItemsRecord($hybridId);
         if ($hybridItemRecord)
         {
@@ -220,6 +238,14 @@ class HybridImport
         }
         $data = json_decode($data, true);
         return $data;
+    }
+
+    protected function getTimeNow()
+    {
+        $date = new DateTime();
+        $date->setTimezone(new DateTimeZone("America/New_York"));
+        $dateNow = $date->format('Y-m-d H:i:s');
+        return $dateNow;
     }
 
     protected function getValueForSubjectElement($text)
@@ -319,14 +345,10 @@ class HybridImport
                     $this->deleteHybridItemElementTexts($itemId, $this->identifierElementId);
 
                     // Update the hybrid record's imported date.
-                    $date = new DateTime();
-                    $date->setTimezone(new DateTimeZone("America/New_York"));
-                    $dateNow = $date->format('Y-m-d H:i:s');
+                    $dateNow = $this->getTimeNow();
                     $hybridItemRecord['imported'] = $dateNow;
                     if (!$hybridItemRecord->save())
                         throw new Exception($this->reportError(__FUNCTION__, ' save failed'));
-
-                    $this->logAction("Updated item $itemId for source record $hybridId");
                 }
                 else
                 {
@@ -355,8 +377,9 @@ class HybridImport
         $this->addSiteLinkToHybridItem($item, $sourceRecord, $this->siteElementId);
 
         // Call AvantElasticsearch to update indexes
-        if (plugin_is_active('AvantElasticsearch'))
+        if (!$this->bulkImport && plugin_is_active('AvantElasticsearch'))
         {
+            $this->trace("Update Elasticsearch indexes");
             $avantElasticsearchIndexBuilder = new AvantElasticsearchIndexBuilder();
             $sharedIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_SHARE) == true;
             $localIndexIsEnabled = (bool)get_option(ElasticsearchConfig::OPTION_ES_LOCAL) == true;
@@ -365,15 +388,25 @@ class HybridImport
         }
 
         // Save the item, updating it's public status if necessary.
+        $this->trace("saveOmekaItem");
         $public = $sourceRecord['properties']['<public>'] == '1';
         $this->saveOmekaItem($item, $public);
+
+        $this->reportAction($action, $item, $hybridId);
     }
 
-    protected function logAction($action)
+    protected function logAction($action, $trace = false)
     {
+        if ($trace && !$this->tracing)
+            return;
+
         $newline = current_user() ? '<br/>' : PHP_EOL;
         if ($this->actions)
             $this->actions .= $newline;
+
+        if ($trace)
+            $action = $this->getTimeNow() . ": $action";
+
         $this->actions .= $action;
     }
 
@@ -445,6 +478,17 @@ class HybridImport
         return $response;
     }
 
+    protected function reportAction($action, $item, $hybridId)
+    {
+        $this->trace("DONE");
+
+        $actionName = $action == self::ACTION_ADD ? 'Added' : 'Updated';
+        $this->logAction("$actionName item $item->id for source record $hybridId");
+
+        if ($this->tracing)
+            $this->logAction('');
+    }
+
     protected function reportError($methodName, $error)
     {
         return "Exception in method $methodName(): $error";
@@ -468,23 +512,8 @@ class HybridImport
             throw new Exception($this->reportError(__FUNCTION__, ' save failed'));
     }
 
-    protected function validateHeaderRow($headerRow)
+    protected function trace($message)
     {
-        $header = $headerRow;
-
-        // Verify that the file is UTF-8 and remove the BOM from the first column of the first row.
-        $column0Row0 = $header[0];
-        $bom = pack("CCC", 0xef, 0xbb, 0xbf);
-        if (0 === strncmp($column0Row0, $bom, 3))
-        {
-            // BOM detected - file is UTF-8.
-            $header[0] = str_replace("\xEF\xBB\xBF", '', $column0Row0);
-            return $header;
-        }
-        else
-        {
-            $this->logAction("CSV file is not in UTF-8 format");
-            return null;
-        }
+        $this->logAction($message, true);
     }
 }
