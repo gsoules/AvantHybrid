@@ -281,9 +281,7 @@ class HybridImport
             }
             else
             {
-                // Create an 'Other' Subject term.
-                $normalizedTerm = AvantVocabulary::normalizeSiteTerm($kind, $subject);
-                $term = "Other, $normalizedTerm";
+                $term = $subject;
             }
 
             $this->lookupTermInSiteTermsTable($kind, $commonTermId, $term);
@@ -307,8 +305,7 @@ class HybridImport
         }
         else
         {
-            // Create an 'Other' Type term.
-            $term = "Other, $text";
+            $term = $text;
         }
 
         $this->lookupTermInSiteTermsTable($kind, $commonTermId, $term);
@@ -442,6 +439,12 @@ class HybridImport
                 // The term is in the site terms table as a common term.
                 $addSiteTerm = false;
             }
+        }
+        else
+        {
+            // Add the term to the "Other" hierarchy.
+            $normalizedTerm = AvantVocabulary::normalizeSiteTerm($kind, $term);
+            $term = "Other, $normalizedTerm";
         }
 
         if ($addSiteTerm)
