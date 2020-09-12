@@ -111,6 +111,10 @@ class AvantHybrid
                     $response = $hybridImport->fetchSourceRecords();
                     break;
 
+                case HybridImport::ACTION_DELETE_ALL:
+                    $response = $hybridImport->deleteAllHybridItems();
+                    break;
+
                 case HybridImport::ACTION_ADD:
                 case HybridImport::ACTION_UPDATE:
                 case HybridImport::ACTION_DELETE:

@@ -7,6 +7,7 @@ class HybridImport
 
     const ACTION_ADD = 'hybrid-add';
     const ACTION_DELETE = 'hybrid-delete';
+    const ACTION_DELETE_ALL = 'hybrid-delete-all';
     const ACTION_FETCH = 'hybrid-fetch';
     const ACTION_UPDATE = 'hybrid-update';
 
@@ -159,6 +160,27 @@ class HybridImport
         return $item;
     }
 
+    public function deleteAllHybridItems()
+    {
+        // CAUTION: This will delete all hybrid records and their Omeka items and attachments.
+        // Only use this method to cleanup an installation.
+
+        $this->bulkImport = true;
+
+        $sourceRecords = AvantHybrid::getAllHybridItemIds();
+        foreach ($sourceRecords as $sourceRecord)
+        {
+            echo '<br/>DELETED ' . $sourceRecord['hybrid_id'];
+            $this->deleteHybridItem($sourceRecord['hybrid_id']);
+        }
+
+        $response['status'] = 'OK';
+        $response['site-id'] = $this->siteId;
+        $response['results'] = $this->actions;
+
+        return $response;
+    }
+
     protected function deleteHybridItem($hybridId)
     {
         $itemId = $this->deleteHybridItemSourceRecords($hybridId);
@@ -226,6 +248,7 @@ class HybridImport
     public function fetchSourceRecords()
     {
         $sourceRecords = AvantHybrid::getAllHybridItemIds();
+        $results = array();
         foreach ($sourceRecords as $sourceRecord)
             $results[$sourceRecord['hybrid_id']] = $sourceRecord['imported'];
 
