@@ -466,8 +466,7 @@ class HybridImport
         else
         {
             // Add the term to the "Other" hierarchy.
-            $normalizedTerm = AvantVocabulary::normalizeSiteTerm($kind, $term);
-            $term = "Other, $normalizedTerm";
+            $term = "Other, $term";
         }
 
         if ($addSiteTerm)
@@ -540,11 +539,6 @@ class HybridImport
     {
         if ($item->public != $public)
             $item['public'] = $public;
-
-        $date = new DateTime();
-        $date->setTimezone(new DateTimeZone("America/New_York"));
-        $modified = $date->format('c');
-        $item['modified'] = $modified;
 
         $_SESSION[self::OPTION_HYBRID_IMPORT_SAVING_ITEM] = true;
         $saved = $item->save();
