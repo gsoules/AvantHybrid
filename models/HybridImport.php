@@ -24,13 +24,24 @@ class HybridImport
     function __construct($options)
     {
         $parts = explode(',', $options);
-        $this->bulkImport = in_array('bulk', $parts);
-        $this->tracing = in_array('trace', $parts);
 
-        $this->logAction("Bulk:$this->bulkImport, Trace:$this->tracing");
+        // The bulk import option means that this import request is one of a many that are intended
+        // to quickly import many source records. To improve performance, no calls will be made to
+        // AvantElastic search to add, update, or remove items from the local and shared indexes.
+        // This speeds up the import process by 10x or more, but using this option requires that
+        // that you rebuild the Elasticsearch indexes, via the Elasticsearch Indexing page,
+        // immediately after the import has completed.
+        $this->bulkImport = in_array('bulk', $parts);
+
+        $this->tracing = in_array('trace', $parts);
+        if ($this->tracing)
+        {
+            $this->logAction('');
+            $bulk = $this->bulkImport ? 'Yes' : ' No';
+            $this->trace("Bulk import: $bulk");
+        }
 
         $this->useCommonVocabulary =
-            !$this->bulkImport &&
             plugin_is_active('AvantVocabulary') &&
             plugin_is_active('AvantElasticsearch') &&
             intval(get_option(HybridConfig::OPTION_HYBRID_USE_CV)) != 0;
@@ -111,18 +122,15 @@ class HybridImport
         $item->saveElementTexts();
     }
 
-    protected function createNewHybridItemsRecord($hybrid, $hybridId)
+    protected function createNewHybridItemsRecord($item, $hybridId)
     {
         $this->trace(__FUNCTION__);
-
-        $item = $this->createNewOmekaItem($hybrid);
 
         $newHybridItemsRecord = new HybridItems();
         $newHybridItemsRecord['hybrid_id'] = $hybridId;
         $newHybridItemsRecord['item_id'] = $item->id;
         if (!$newHybridItemsRecord->save())
             throw new Exception($this->reportError(__FUNCTION__, ' save failed'));
-        return $item;
     }
 
     protected function createNewOmekaItem($hybrid)
@@ -141,7 +149,11 @@ class HybridImport
             'public' => $public,
             'item_type_id' => AvantAdmin::getCustomItemTypeId()
         );
+
+        $_SESSION[self::OPTION_HYBRID_IMPORT_SAVING_ITEM] = true;
         $item = insert_item($metadata, $elementTexts);
+        $_SESSION[self::OPTION_HYBRID_IMPORT_SAVING_ITEM] = false;
+
         return $item;
     }
 
@@ -151,7 +163,7 @@ class HybridImport
         $item = ItemMetadata::getItemFromId($itemId);
         if ($item)
         {
-            if (plugin_is_active('AvantElasticsearch'))
+            if (!$this->bulkImport && plugin_is_active('AvantElasticsearch') )
             {
                 AvantElasticsearch::deleteItemFromIndexes($item);
             }
@@ -228,7 +240,8 @@ class HybridImport
         if (empty($data))
         {
             // No data means we are debugging using hard-coded data copy/pasted from the Python exporter in dry run mode.
-            $data = "{'PPID': 'B04AC87A-726E-475E-A61F-923941704156', 'OBJECTID': '2006.1.3', 'OBJNAME': 'Instruction Book', 'TITLE': 'Graded Literature Readers, Second Book', 'IMAGE': '013/200613.jpg', 'THUMB': '013/thumbs/200613.jpg', 'WEBINCLUDE': '1', 'CAT': 'library/<hybrid-id>', 'SUBJECTS': 'literature;reading;elementary school teaching', 'DATE': '1899', 'PLACE': '', 'CREATOR': 'Judson, Harry Pratt and Ida C. Bender, eds.', 'PUBLISHER': 'Maynard, Merrill, & Co.', 'COLLECTION': 'Books in Archival Storage', 'DESCRIP': '\"In the Graded Literature Readers good literature has been presented as early as possible, and the classic tales and fables, to which constant allusion is made in literature and daily life, are largely used.\"\r\n'}";
+//            $data = "{'PPID': 'B04AC87A-726E-475E-A61F-923941704156', 'OBJECTID': '2006.1.3', 'OBJNAME': 'Instruction Book', 'TITLE': 'Graded Literature Readers, Second Book', 'IMAGE': '013/200613.jpg', 'THUMB': '013/thumbs/200613.jpg', 'WEBINCLUDE': '1', 'CAT': 'library/<hybrid-id>', 'SUBJECTS': 'literature;reading;elementary school teaching', 'DATE': '1899', 'PLACE': '', 'CREATOR': 'Judson, Harry Pratt and Ida C. Bender, eds.', 'PUBLISHER': 'Maynard, Merrill, & Co.', 'COLLECTION': 'Books in Archival Storage', 'DESCRIP': '\"In the Graded Literature Readers good literature has been presented as early as possible, and the classic tales and fables, to which constant allusion is made in literature and daily life, are largely used.\"\r\n'}";
+            $data = "{'PPID': 'C0910F7B-BEA4-42E6-9CD5-051821184355', 'OBJECTID': '018.011.16', 'OBJNAME': 'Book', 'TITLE': 'Poems For Sutton Island', 'IMAGE': '', 'THUMB': '', 'WEBINCLUDE': '0', 'CAT': 'library/<hybrid-id>', 'SUBJECTS': '', 'DATE': '1969', 'PLACE': '', 'CREATOR': 'Hortense Flexner', 'PUBLISHER': '', 'COLLECTION': '', 'DESCRIP': ''}";
 
             // Convert the string to use double-quotes instead of single, and remove carriage returns, so that json_decode will work;
             $data = str_replace("\r\n", "", $data);
@@ -320,12 +333,13 @@ class HybridImport
             else
             {
                 // Create a new hybrid item and add it to the hybrids table.
-                $item = $this->createNewHybridItemsRecord($sourceRecord, $hybridId);
+                $item = $this->createNewOmekaItem($sourceRecord);
                 if (!$item)
                 {
                     $this->logAction("Failed to add hybrid item for source record $hybridId");
                     return;
                 }
+                $this->createNewHybridItemsRecord($item, $hybridId);
             }
         }
 
@@ -387,7 +401,7 @@ class HybridImport
             $avantElasticsearch->updateIndexForItem($item, $avantElasticsearchIndexBuilder, $sharedIndexIsEnabled, $localIndexIsEnabled);
         }
 
-        // Save the item, updating it's public status if necessary.
+        // Save the item, updating its public status if necessary.
         $this->trace("saveOmekaItem");
         $public = $sourceRecord['properties']['<public>'] == '1';
         $this->saveOmekaItem($item, $public);
@@ -480,13 +494,14 @@ class HybridImport
 
     protected function reportAction($action, $item, $hybridId)
     {
-        $this->trace("DONE");
-
         $actionName = $action == self::ACTION_ADD ? 'Added' : 'Updated';
-        $this->logAction("$actionName item $item->id for source record $hybridId");
+        $this->logAction("$actionName item $item->id for source record $hybridId", $this->tracing);
 
         if ($this->tracing)
+        {
+            // Insert a blank line after each item.
             $this->logAction('');
+        }
     }
 
     protected function reportError($methodName, $error)
