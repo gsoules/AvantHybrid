@@ -23,7 +23,7 @@ class HybridImport
     protected $vocabularyCommonTermsTable = null;
     protected $vocabularySiteTermsTable = null;
 
-    function __construct($siteId, $options)
+    function __construct($siteId = '', $options = '')
     {
         $this->siteId = $siteId;
         $parts = explode(',', $options);
