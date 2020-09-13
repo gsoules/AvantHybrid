@@ -265,7 +265,8 @@ class HybridImport
         if (empty($data))
         {
             // No data means we are debugging using hard-coded data copy/pasted from the Python exporter in dry run mode.
-            $data = "{'PPID': 'C0910F7B-BEA4-42E6-9CD5-051821184355', 'OBJECTID': '018.011.16', 'OBJNAME': 'Book', 'TITLE': 'Poems For Sutton Island', 'IMAGE': '', 'THUMB': '', 'WEBINCLUDE': '0', 'CAT': 'library/<hybrid-id>', 'SUBJECTS': '', 'DATE': '1969', 'PLACE': '', 'CREATOR': 'Hortense Flexner', 'PUBLISHER': '', 'COLLECTION': '', 'DESCRIP': ''}";
+            // The pasted in JSON string must use single quotes for keys and values and be wrapped in double quotes.
+            $data = "{'PPID': 'B427FDC4-5A2A-42AA-A146-337349578482', 'OBJECTID': '001-056-1-2161', 'OBJNAME': 'Annual Meeting report', 'TITLE': 'Annual Meeting of the Garden Club of America', 'IMAGE': '008/00105612161.jpg', 'THUMB': '008/thumbs/00105612161.jpg', 'WEBINCLUDE': '1', 'SITE': 'archive/<hybrid-id>', 'CAT': 'Archives', 'SUBJECTS': 'Gardens;History - Mount Desert Island;Landscape', 'DATE': '1934', 'PLACE': '', 'CREATOR': '', 'PUBLISHER': '', 'COLLECTION': '', 'DESCRIP': 'Yellow bound yearbook program with pencil reading Garden Club of Mt. Desert.  Cover has black and white photograph of a sailboat in the Sound and reads: Annual Meeting of the Garden Club of America July 11,12,13, 1934 Garden Club of Mt. Desert   Included several other items to follow  Also 2 newspaper clippings that confirmed these items belonged to Mrs.Joseph W.Wilshire of Wilshire Farm of GreenwichCT'}";
 
             // Convert the string to use double-quotes instead of single, and remove carriage returns, so that json_decode will work;
             $data = str_replace("\r\n", "", $data);
@@ -304,10 +305,10 @@ class HybridImport
             }
             else
             {
-                $term = $subject;
+                $term = "Other, $subject";
             }
 
-            $this->lookupTermInSiteTermsTable($kind, $commonTermId, $term);
+            $this->lookupTermInSiteTermsTable($kind, $term, $commonTermId);
             $terms[] = $term;
         }
 
@@ -328,10 +329,10 @@ class HybridImport
         }
         else
         {
-            $term = $text;
+            $term = "Other, $text";
         }
 
-        $this->lookupTermInSiteTermsTable($kind, $commonTermId, $term);
+        $this->lookupTermInSiteTermsTable($kind, $term, $commonTermId);
 
         $terms = array($term);
         return $terms;
@@ -445,7 +446,7 @@ class HybridImport
         $this->actions .= $action;
     }
 
-    protected function lookupTermInSiteTermsTable($kind, $commonTermId, $term)
+    protected function lookupTermInSiteTermsTable($kind, $term, $commonTermId)
     {
         $addSiteTerm = true;
 
@@ -463,17 +464,14 @@ class HybridImport
                 $addSiteTerm = false;
             }
         }
-        else
-        {
-            // Add the term to the "Other" hierarchy.
-            $term = "Other, $term";
-        }
 
         if ($addSiteTerm)
         {
-            AvantVocabulary::addNewUnmappedSiteTerm($kind, $term);
-            $this->trace("Added unmapped site term '$term' (kind = $kind)");
+            AvantVocabulary::addNewSiteTerm($kind, $term, $commonTermId);
+            $this->trace("Added site term '$term' (kind = $kind)");
         }
+
+        return $term;
     }
 
     public function performImportAction($action)
