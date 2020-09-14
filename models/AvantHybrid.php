@@ -54,6 +54,11 @@ class AvantHybrid
     public static function getImageHtml($item, $hybridImageRecord, $isThumbnail = false, $index = 0)
     {
         $imageUrl = self::getImageUrl($hybridImageRecord);
+
+        // Verify that the hybrid image exists on the hybrid image server.
+        if (!AvantCommon::remoteImageExists($imageUrl))
+            return '';
+
         $identifier = ItemMetadata::getItemIdentifier($item);
         $title = ItemMetadata::getItemTitle($item);
         $thumbUrl = $isThumbnail ? self::getThumbUrl($hybridImageRecord) : self::getImageUrl($hybridImageRecord);
