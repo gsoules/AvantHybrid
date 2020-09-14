@@ -158,12 +158,12 @@ class HybridConfig extends ConfigOptions
             self::errorIf(true, CONFIG_LABEL_HYBRID_IMPORT_PW, __('Password must be 8 alphanumeric characters'));
 
         $imageUrl = $_POST[self::OPTION_HYBRID_IMAGE_URL];
-        if (substr( $imageUrl, -1 ) != '/')
+        if ($imageUrl && substr($imageUrl, -1 ) != '/')
             $imageUrl .= '/';
         set_option(self::OPTION_HYBRID_IMAGE_URL, $imageUrl);
 
         $siteUrl = $_POST[self::OPTION_HYBRID_SITE_URL];
-        if (substr( $siteUrl, -1 ) != '/')
+        if ($imageUrl && substr($siteUrl, -1 ) != '/')
             $siteUrl .= '/';
         set_option(self::OPTION_HYBRID_SITE_URL, $siteUrl);
 

@@ -68,6 +68,11 @@ class AvantHybrid
 
     public static function getImageRecords($itemId)
     {
+        if (empty(get_option(HybridConfig::OPTION_HYBRID_IMAGE_URL)))
+        {
+            // Don't return any records if the site has no image server.
+            return array();
+        }
         return get_db()->getTable('HybridImages')->getHybridImageRecordsByItemId($itemId);
     }
 
