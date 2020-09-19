@@ -62,7 +62,7 @@ class AvantHybrid
         $identifier = ItemMetadata::getItemIdentifier($item);
         $title = ItemMetadata::getItemTitle($item);
         $thumbUrl = $isThumbnail ? self::getThumbUrl($hybridImageRecord) : self::getImageUrl($hybridImageRecord);
-        $imageHtml = ItemPreview::getImageLinkHtml($item->id, $identifier, 'lightbox', $imageUrl, $thumbUrl, '', $title, IMAGE_THUMB_TOOLTIP, '0', $index);
+        $imageHtml = ItemPreview::getImageLinkHtml($item->id, $identifier, 'lightbox', $imageUrl, $thumbUrl, '', $title, IMAGE_TOOLTIP, '0', $index);
         return $imageHtml;
     }
 
