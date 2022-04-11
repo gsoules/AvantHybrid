@@ -1,5 +1,7 @@
 <?php
 
+define('HYBRID_IMAGE_TOOLTIP', __('See larger image'));
+
 class AvantHybrid
 {
     public static function deletingHybridItem()
@@ -62,7 +64,8 @@ class AvantHybrid
         $identifier = ItemMetadata::getItemIdentifier($item);
         $title = ItemMetadata::getItemTitle($item);
         $thumbUrl = $isThumbnail ? self::getThumbUrl($hybridImageRecord) : self::getImageUrl($hybridImageRecord);
-        $imageHtml = ItemPreview::getImageLinkHtml($item->id, $identifier, 'lightbox', $imageUrl, $thumbUrl, '', $title, IMAGE_TOOLTIP, '0', $index);
+        $tooltip = AvantCommon::getCustomText('image_tooltip', HYBRID_IMAGE_TOOLTIP);
+        $imageHtml = ItemPreview::getImageLinkHtml($item->id, $identifier, 'lightbox', $imageUrl, $thumbUrl, '', $title, $tooltip, '0', $index);
         return $imageHtml;
     }
 
